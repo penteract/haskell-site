@@ -1,0 +1,21 @@
+<<SET title=Starting your game...>>
+<<SET top=Starting your game...>>
+
+<<SET main=
+Starting your game...
+>>
+
+<<SET wholeside=
+>>
+
+<<SET scripts=
+<script>
+$.post('startgamepost',
+{gameID:"<<gameID>>" },
+function(m){
+	location.assign(m);
+});
+</script>
+>>
+
+<<LOAD base.html>>

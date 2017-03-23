@@ -1,0 +1,39 @@
+<<TEMPLATE>>
+<<SET main=
+  <span id="0" style="color:blue{%if playern==0%};font-style:italic{%endif%}" ><<player0>></span> vs <span id="1" style="color:red{%if playern==1%};font-style:italic{%endif%}"><<player1>></span><br>
+  <div id="game">
+<<game>>
+  </div>
+>>
+
+<<SET moreside=
+<div id="messagediv">
+    <div id="messages" style="overflow-y: auto;height:200px;"></div><br>
+    <input id="msg" type="text" onKeyPress="if (event.which == 13) sendMsg();"></input>
+    <input type="button" value="send" onclick="sendMsg();"> </input>
+</div>
+>>
+
+<<SET scripts=
+<<scripts>>
+<script type="text/javascript" src="/staticfiles/ingame.js"></script>
+
+<script>
+var gameID='<<gameID>>';
+
+{%if playerID is defined%}
+var playerID='<<playerID>>'
+  {%if opponent!="AI"%}
+  setTimeout(poller,t);t+=2000
+  {%endif%}
+{%else%}
+var playerID=""
+{%endif%}
+player=<<playern>>//0 or 1
+lastm='<<data>>'
+lastj=JSON.parse(lastm)
+$(function(){process(JSON.parse(lastm));});
+</script>
+>>
+
+<<LOAD base.html>>

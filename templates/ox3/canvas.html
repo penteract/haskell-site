@@ -1,0 +1,109 @@
+<<SET title=3DOX - play>>
+<<SET top=Play 3D noughts and crosses>>
+
+<<SET side=
+The cells represent 4 layers in a 4*4*4 cube. To win get four cells that form a line in the cube.<br>
+Click on a cell to make your move there.
+>>
+
+
+<<SET scripts=
+<script>
+String.prototype.lpad = function(padString, length) {
+  var str = this;
+  while (str.length < length)
+    str = padString + str;
+  return str;
+}
+
+function col(r,g,b){
+  return "#"+(b+g*256+r*256*256).toString(16).lpad("0",6)}
+
+
+var sz=32//width and height of a canvas cell
+var gameID='<<gameID>>';
+
+function show(data){
+  var c=document.getElementById("myCanvas");
+  var ctx=c.getContext("2d");
+  ctx.lineWidth=3
+  for(z=0;z<4;z++){
+    for(y=0;y<4;y++){
+      for(x=0;x<4;x++){
+        ctx.fillStyle=col(255-32*x,255-32*y,255-40*z);
+        ctx.fillRect(32*x,128*z+32*y,32,32);
+        if (data.board[z*16+y*4+x]=="X"){drawX(ctx,x,y,z);}
+        else if (data.board[16*z+y*4+x]=="O"){drawO(ctx,x,y,z);}
+      }
+    }
+  }
+  for (i in data.wonlines){
+    line=data.wonlines[i]
+    for(j=0;j<4;j++){
+      ctx.beginPath();
+      ctx.arc((line[j][0]+0.5)*sz,(line[j][1]+0.5+4*line[j][2])*sz,sz/4,0 , 2 * Math.PI, false);
+      ctx.fillStyle="yellow"
+      ctx.fill();
+    }
+  }
+}
+
+function drawX(ctx,x,y,z){
+  ctx.beginPath();
+  ctx.strokeStyle="blue"
+  ctx.moveTo(x*sz+2,y*sz+z*sz*4+2);
+  ctx.lineTo(x*sz+sz-2,y*sz+z*sz*4+sz-2);
+  ctx.moveTo(x*sz+2,y*sz+z*sz*4+sz-2);
+  ctx.lineTo(x*sz+sz-2,y*sz+z*sz*4+2);
+  ctx.stroke();
+  }
+
+function drawO(ctx,x,y,z){
+  ctx.beginPath();
+  ctx.strokeStyle="red"
+  ctx.arc((x+0.5)*sz,(y+0.5+4*z)*sz,sz/2-2,0 , 2 * Math.PI, false);
+  ctx.stroke();
+}
+
+</script>
+
+>>
+
+  
+  <<SET game=
+    <canvas id="myCanvas" width=128 height=512>
+      your browser does not support this feature
+    </canvas>
+    
+    <script>
+
+var c=document.getElementById("myCanvas");
+var ctx=c.getContext("2d");
+
+for(x=0;x<4;x++){
+  for(y=0;y<4;y++){
+    for(z=0;z<4;z++){
+      ctx.fillStyle=col(255-32*x,255-32*y,255-40*z);
+      ctx.fillRect(sz*x,sz*4*z+sz*y,sz,sz);
+    }
+  }
+}
+
+
+function getCell(mx,my){
+  var x=Math.floor(mx/sz);
+  var z=Math.floor(my/(sz*4));
+  var y=Math.floor((my-z*sz*4)/sz)
+  return [x,y,z]
+}
+
+$("#myCanvas").mousedown(function(e){
+  posx=e.pageX-this.offsetLeft;
+  posy=e.pageY-this.offsetTop;
+  click(getCell(posx,posy).join(""),$("#player").val())
+});
+    </script>
+    
+>>
+
+<<LOAD game.html>>

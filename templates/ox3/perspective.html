@@ -1,0 +1,440 @@
+
+<<SET title=3DOX - play>>
+<<SET top=Play 3D noughts and crosses>>
+
+<<SET side=
+    Click and drag to spin the cube.<br>
+    Press a cell once to highlight it, then press again to confirm your move.<br>
+    If you can't see sliders, parameters should be between 0 and 100
+>>
+
+<<SET scripts=
+<script>
+//Helper functions
+function dist3(l){return (l[0]*l[0]+l[1]*l[1]+l[2]*l[2]);}
+//distance between a point in 3D space and the origin
+//for comparisons, does not sqrt
+
+function mid3(a,b){return [(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2];}
+//the midpoint of two coordinates in 3D space
+
+function gradient(a,b){//returns the gradient between two points on the canvas
+  if (a[0]-b[0]==0){return (a[1]-b[1]>0)?100000:-100000;}
+  return (a[1]-b[1])/(a[0]-b[0]);
+}
+
+function theta(x,y){//returns the angle between the positive x-axis and the vector from the origin to (x,y)
+  if(y==0){return Math.PI/4*(x>0?1:-1);}
+  return Math.atan(x/y)+(y<0?Math.PI/4:0)*(x<0?-1:1);
+}
+
+function rotate(x,y,a){return [x*Math.cos(a)-y*Math.sin(a),y*Math.cos(a)+x*Math.sin(a)];}
+//returns the coordinates of a point (x,y)  after it has been rotated through an angle a clockwise
+
+
+String.prototype.lpad = function(padString, length) {
+  var str = this;
+  while (str.length < length) str = padString + str;
+  return str;
+};
+
+function col(r,g,b){//returns a valid color string from individual rbg values
+  return "#"+(b+g*256+r*256*256).toString(16).lpad("0",6)}
+
+function drawline(a,b){//draws a line from a to b (points on the canvas, not in 3D space)
+  ctx.beginPath();
+  ctx.moveTo(a[0],a[1]);
+  ctx.lineTo(b[0],b[1]);
+  ctx.stroke();
+}
+  
+function drawcirc(x,y,r){//draws a circle center (x,y) radius r
+  ctx.beginPath();
+  ctx.arc(x,y,r,0,Math.PI*2);
+  ctx.stroke();
+}
+
+//End of helper functions
+
+//The interface for a game
+function show(data){//updates the data about the content of cells, which will change the grid when draw() is next called
+  for(z=0;z<4;z++){
+    for(y=0;y<4;y++){
+      for(x=0;x<4;x++){
+        cells[[x,y,z]][9]=data.board[z*16+y*4+x];
+      }
+    }
+  }
+  for (i=0;i<data.wonlines.length;i++){
+    for(j=0;j<4;j++){
+      c=data.wonlines[i][j];
+      cells[[c[0],c[1],c[2]]][9]+="W";
+    }
+  }
+}
+</script>
+>>
+
+<<SET game=
+<canvas id="Canvas" class="unselectable" width=500 height=500>
+  your browser does not support this feature
+</canvas>
+<form name="options">
+  Slipperiness:<input name="slipperiness" type="range" value=0 onchange="SLIPPERINESS=Math.sqrt(1-(opts.slipperiness.value-100)*(opts.slipperiness.value-100)/10000);"><br />
+  Sensitivity:<input name="sensitivity" type="range" value=40 onchange="SENSITIVITY=Math.exp(opts.sensitivity.value/25.0-7);"><br />
+  <!--these options contain formulea which map the value between 1 and 100 to a value more appropriate for the variable-->
+</form>
+
+<script>
+
+var opts=document.options;
+var VIEWDIST=1.5;//distance between the viewport and the origin
+var SENSITIVITY,SLIPPERINESS;
+opts.sensitivity.onchange();
+opts.slipperiness.onchange();
+
+var Canvas=document.getElementById("Canvas");
+var ctx=Canvas.getContext("2d");
+
+var CUBECENTER=[0.0,0.0,7.0];
+var VIEWSIZE=0.7;
+var CANVASSIZE=500;
+var gap=0.38//half the size of the gap between cells, 0.5 would give cells of width 0
+
+
+var edgePairs=[]//pairs of numbers representing the pairs of verticies in a cube between which there are edges
+for (var i=0;i<7;i++){//initialize edgePairs
+  if (!(1&i)){edgePairs.push([i,i+1]);}
+  if (!(2&i)){edgePairs.push([i,i+2]);}
+  if (!(4&i)){edgePairs.push([i,i+4]);}
+}
+
+
+//initalize the cells and verticies
+/*the cells are stored as an object with '0,0,0' , '0,0,1' ... '3,3,3' as keys.
+The data stored about each cell is a list, containing the coordinates of the center, followed by the coordinates of each vertex, then the contents of the cell("O", "X" or " " followed by a "W" if it is part of a winning line*/
+var cells={};
+
+
+for(z=0;z<4;z++){
+  for(y=0;y<4;y++){
+    for(x=0;x<4;x++){
+      cells[[x,y,z]]=[[CUBECENTER[0]-1.5+x,CUBECENTER[1]-1.5+y,CUBECENTER[2]-1.5+z]];
+      //set the centre of each cell
+      }
+    }
+  }
+
+for(index in cells){
+  var cell=cells[index];
+  var c=cell[0];
+  var x=c[0];
+  var y=c[1];
+  var z=c[2];
+  for(var k=0;k<8;k++){//now add each vertex
+    cell.push([x+(k&1?0.5-gap:gap-0.5),y+(k&2?0.5-gap:gap-0.5),z+(k&4?0.5-gap:gap-0.5)]);
+  }
+  cell.push(" ");//set its content(the value does not matter because it gets set later)
+}
+
+var scells=[];//sorted in order of distance from the viewer, furthest first
+var cornerMap={};//canvas coordinates of each vertex of each cell
+
+
+
+function sortcells(){//sets scells to the list of cells and sorts them by distance
+  scells=[];
+  for(i in cells){scells.push([i,dist3(cells[i][0])]);}
+  scells.sort(function(a,b){return b[1]-a[1]});
+}
+
+function mapPoint(pos){//maps a point in 3d space to a point on the canvas
+  var x=(pos[0]/(pos[2]/VIEWDIST)/VIEWSIZE+1)*CANVASSIZE/2;
+  var y=(pos[1]/(pos[2]/VIEWDIST)/VIEWSIZE+1)*CANVASSIZE/2;
+  return [x,y];
+}
+
+  
+function getHoverCell(ptrx,ptry){
+  //updates the value of hoverCell
+  hoverCell='';
+  ptrPos=[ptrx,ptry]
+  for(var i=scells.length-1;i>=0 && hoverCell=='';i--){
+    //test each cell starting with the nearest, going to the furthest away
+    var pos=scells[i][0]
+    hoverCell=pos[0]+pos[2]+pos[4]
+    var pointMap=cornerMap[pos].slice(0,8);
+    //find the leftmost and rightmost verticies of the cell
+    var rmax=0;
+    var lmin=CANVASSIZE;
+    for(var j=0;j<pointMap.length;j++){
+      var x=pointMap[j][0];
+      if(x>rmax){r=j;rmax=x;}
+      if(x<lmin){l=j;lmin=x;}
+    }
+    if (ptrx>rmax || ptrx<lmin){hoverCell='';continue;}
+    var next;
+    var cur=l;
+    //go round the edge of the cell anticlockwise (remember y increases downwards) from the leftmost point
+    while (cur!=r && hoverCell!=''){
+      var maxg=-1000000;
+      var pMcur=pointMap[cur];
+      for(var j=0;j<3;j++){//test each vertex which shares an edge with the current one 
+        var c=cur^(Math.pow(2,j));
+        var pMc=pointMap[c];
+        if (pMc[0]<pMcur[0]){continue;}
+        if (gradient(pMcur,pMc)>maxg){//the one with the greatest gradient is next round the edge
+          next=c;
+          maxg=gradient(pMcur,pMc);
+        }
+      }
+      if(ptrx>=pMcur[0] && gradient(pMcur,ptrPos)>maxg){hoverCell='';}
+      //if the gradient to the mouse is greater than that to the next vertex, the mouse is on the convex hull so outside the cell
+      else{cur=next;}
+    }
+    while (cur!=l && hoverCell!=''){//the same as before, this time checking if the mouse is above the cell, going from right to left
+      var maxg=-1000000;
+      var pMcur=pointMap[cur];
+      for(var j=0;j<3;j++){
+        var c=cur^(Math.pow(2,j));
+        var pMc=pointMap[c];
+        if (pMc[0]>pMcur[0]){continue;}
+        if (gradient(pMcur,pMc)>maxg){
+          next=c;
+          maxg=gradient(pMcur,pMc);
+        }
+      }
+      if(ptrx<=pMcur[0] && gradient(pMcur,ptrPos)>maxg){hoverCell='';}
+      else{cur=next;}
+    }
+  }
+}
+
+
+  
+function drawcell(n,cellpos){//draws a cell and any token inside it
+  var co=cornerMap[cellpos[0]];//the canvas coordinates of each corner of the cell 
+  var cell=cells[cellpos[0]];
+  var x=cellpos[0][0];
+  var y=cellpos[0][2];
+  var z=cellpos[0][4];
+  var content=cell[9]
+  
+  var lineWidth=3.0/Math.sqrt(cellpos[1])*VIEWDIST;
+  if (x+y+z==selectedCell && content==" "){lineWidth*=2;}
+  ctx.lineWidth=((-x-y-z*1.5)*(-x-y-z*1.5)/100+1)*lineWidth;
+  ctx.strokeStyle=col(60*x,60*y,60*z);
+  
+  var e=[]
+  for (var i=0;i<edgePairs.length;i++){
+    var pair=edgePairs[i];
+    e.push([co[pair[0]],co[pair[1]],dist3(mid3(cell[pair[0]+1],cell[pair[1]+1]))]);
+  }//list all edges in this cube along with the distance to their midpoints
+    
+  for (var i=0;i<e.length;i++){
+    if (e[i][2]>cellpos[1]){drawline(e[i][0],e[i][1]);}
+  }
+  ctx.lineWidth=lineWidth*2;
+  if (content[0]=="X"){
+    ctx.strokeStyle="#0000ff";
+    for (var i=0;i<4;i++){
+      drawline(co[i],co[(~i)&7]);//draw a line to the opposite corner
+    }
+  }
+  if (content[0]=="O"){
+    ctx.strokeStyle="#ff0000";
+    drawcirc(co[8][0],co[8][1],lineWidth*100*(0.5-gap));
+  }  
+  if (content[1]=="W"){
+    ctx.fillStyle="orange"
+    ctx.beginPath();
+    ctx.arc(co[8][0],co[8][1],lineWidth*8,0 , 2 * Math.PI, false);
+    ctx.fill();
+  }
+    
+  ctx.strokeStyle=col(60*x,60*y,60*z);
+  ctx.lineWidth=((-x-y-z*1.5)*(-x-y-z*1.5)/80+1)*lineWidth;
+  for (var i=0;i<e.length;i++){
+    if (e[i][2]<=cellpos[1]){drawline(e[i][0],e[i][1]);}
+  }
+}
+
+
+function draw(){//draws the grid of cells onto the canvas
+  sortcells()
+  
+  for(var index in cells){
+    cornerMap[index]=[];
+    var cs=cells[index].slice(1,9);
+    for (var n=0;n<cs.length;n++){cornerMap[index].push(mapPoint(cs[n]));}
+    cornerMap[index].push(mapPoint(cells[index][0]));
+  }
+  getHoverCell();
+  ctx.beginPath();
+  ctx.rect(0,0,CANVASSIZE,CANVASSIZE);
+  ctx.fillStyle = 'white';
+  ctx.fill();
+  $.each(scells,drawcell);
+}
+
+
+function pitch(a){//rotates all the cells by a radians about a horizontal axis parallel to the screen
+  var index,i,yz,xyz;
+  for(index in cells){
+    var cell=cells[index];
+    var s=cell.slice(0,9);
+    for(i in s){
+      xyz=s[i];
+      yz=rotate(xyz[1]-CUBECENTER[1],xyz[2]-CUBECENTER[2],a);
+      xyz[1]=yz[0]+CUBECENTER[1];
+      xyz[2]=yz[1]+CUBECENTER[2];
+    }
+  }
+}
+
+
+function yaw(a){//rotates all the cells by a radians about a vertical axis
+  var index,i,xz,xyz;
+  for(index in cells){
+    cell=cells[index];
+    s=cell.slice(0,9);
+    for(i in s){
+      xyz=s[i];
+      xz=rotate(xyz[0]-CUBECENTER[0],xyz[2]-CUBECENTER[2],a);
+      xyz[0]=xz[0]+CUBECENTER[0];
+      xyz[2]=xz[1]+CUBECENTER[2];
+    }
+  }
+}
+
+
+
+var avp=0.00;
+var avy=0.0;
+
+$(document).ready(function(){
+  timer=setInterval(function(){
+    pitch(avp);
+    yaw(avy);
+    draw();
+    avp*=SLIPPERINESS;
+    avy*=SLIPPERINESS;
+  }, 10);
+});
+
+yaw(Math.PI/4)
+pitch(Math.PI/4)
+draw()
+
+
+
+//Input processing:
+//As This uses canvas anyway, I don't need to worry about IE8-
+//I wish PointerEvent was standard :(
+
+var Xold=0;
+var Yold=0;
+var hoverCell="";//the cell which the pointer is currently over, or "" if the pointer is not over any cell
+var selectedCell="";//The selected cell. If this is clicked again, it will be considered confirmation of a play
+var downCell="";//the cell which the mouse was pressed down over most recently
+
+var noClick=false;//Ignore click events after a touch
+var clrNoClick;//Timer
+
+
+pressedown=false;
+
+function act(x,y){
+  Xold=x
+  Yold=y
+  getHoverCell(x,y)
+}
+
+function press(x,y){
+  act(x,y)
+  downCell=hoverCell;
+    if(downCell!=selectedCell){
+      selectedCell="";
+    }
+  pressedown=true;
+}
+function release(x,y){
+  act(x,y)
+  if((downCell==hoverCell) && (hoverCell!="")){
+    if(hoverCell==selectedCell){
+      click(selectedCell);
+      selectedCell="";
+    }
+    else {selectedCell=downCell;}
+  }
+  else {selectedCell="";}
+  pressedown=false;
+}
+function move(dx,dy){
+  avp+=dy*SENSITIVITY
+  avy+=dx*SENSITIVITY
+}
+
+//Get coordinates of a pointer event within the canvas
+function eventX(e)
+  {return e.pageX-Canvas.offsetLeft;}
+function eventY(e)
+  {return e.pageY-Canvas.offsetTop;}
+
+
+function mousemove(e){
+  e.stopPropagation()
+  var x=eventX(e)
+  var y=eventY(e)
+  if(pressedown)
+    move(e.movementX||e.webkitMovementX||e.mozMovementX||(x-Xold), e.movementY||e.webkitMovementY||e.mozMovementY||(y-Yold));
+  act(x,y)
+}
+function mousedown(e){
+  var x=eventX(e)
+  var y=eventY(e)
+  if (!noClick)press(x,y)
+}
+function mouseup(e){
+  var x=eventX(e)
+  var y=eventY(e)
+  if (!noClick)release(x,y)
+}
+
+function touchmove(e){
+  var x=eventX(e.touches[0])
+  var y=eventY(e.touches[0])
+  move((x-Xold),(y-Yold));
+  act(x,y)
+  e.preventDefault()
+}
+function touchdown(e){
+  var x=eventX(e.touches[0])
+  var y=eventY(e.touches[0])
+  press(x,y)
+}
+function touchup(e){
+  var x=eventX(e.changedTouches[0])
+  var y=eventY(e.changedTouches[0])
+  release(x,y)
+  noClick=true
+  clearTimeout(clrNoClick)
+  clrNoClick = setTimeout(function() {noClick=false;}, 500);
+}
+
+Canvas.addEventListener("mousedown",mousedown)
+Canvas.addEventListener("mouseup",mouseup)
+Canvas.addEventListener("mousemove",mousemove)
+
+Canvas.addEventListener("touchstart",touchdown)
+Canvas.addEventListener("touchend",touchup)
+Canvas.addEventListener("touchmove",touchmove)
+
+
+$(document).mousedown(function(e){pressedown=true;});
+$(document).mouseup(function(e){pressedown=false;});
+
+</script>
+>>
+
+<<LOAD game.html>>
