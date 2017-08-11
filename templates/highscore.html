@@ -25,9 +25,9 @@
 <table style="border:0px">
 <tr style="font-weight:bold"><td>Player</td><td style="width:5px"></td><td>Score</td></tr>
 <tr style="height:5px"><td></td><td></td><td></td></tr>
-  {% for pid,pscore in players %}
+  <<FOR pid,pscore IN players:
     <tr{{' style="font-weight:bold"' if pid==playerid}}><td><<pname>></td><td></td><td><<pscore>></td></tr>
-  {%endfor%}
+  >>
 </table>
 </div>
 

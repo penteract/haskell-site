@@ -7,7 +7,7 @@ import Data.Char
 import Data.Maybe(fromMaybe)
 
 import Template
-import Data
+--import Data
 
 type FileContents = String
 
@@ -23,4 +23,4 @@ type FileContents = String
 main :: IO ()
 main = do
    [inDir,outDir] <- getArgs
-   procDir [] inDir outDir
+   procDir [("four",Lst $ map (Str .show) [0..3])] inDir outDir

@@ -78,17 +78,17 @@ $(function(){$(".sub td").click(function(){
 
 <<SET game=
 <table class='main'>
-{% for z in four %}
+<<FOR z IN four:
   <tr><td><table class='sub'>
-  {% for y in four %}
+  <<FOR y IN four:
     <tr>
-    {% for x in four %}
+    <<FOR x IN four:
       <td id=t<<x>><<y>><<z>>><p id=p<<x>><<y>><<z>> class=in-cell> </p></td>
-    {% endfor %}
+    >>
     </tr>
-  {% endfor %}
+  >>
   </table></td></tr>
-{% endfor %}
+>>
 </table>
 >>
 <<LOAD game.html>>

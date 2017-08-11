@@ -1,0 +1,72 @@
+body {background-color:#FFFFFF;
+	font-family:calibri,sans-serif;
+	margin:0px}
+
+#top {min-width:20em;
+	background-color:lightblue;
+	font-size:20pt;
+	font-family:"Bell MT",serif;
+	padding:0.5em;}
+	
+
+#main {min-width:20em;
+	padding:1em 1.5em;}
+
+.side{min-width:10em;
+	text-align:right;
+	clear:both;}
+	
+.b{background:yellow;
+	border:5px solid white;
+	border-radius:10px;
+    padding: 10px;}
+	
+.b a{text-decoration: none;}
+.b a:hover{text-decoration: underline;}
+.b ul{list-style-type: none}
+
+@media (min-width:35em){
+#main {float:left;
+	min-width:20em;
+	width:60%;
+	padding:1em 1.5em;}
+.side{width:30%;
+	max-width:calc(100% - 25em);
+	float:right;
+	clear:none;
+	text-align:right;}
+}
+
+.turn{
+	font-weight:bold;
+}
+
+#messages{overflow-y: auto;
+	height:200px;
+	border:2px solid black;
+	padding:2px;}
+
+#side {background-color:#c0302d;
+	color:white;
+	padding:0.1em 1em 0.2em 0.2em;}
+
+#links {min-width:7em;
+	padding:1em 1em 0.2em 0.2em;}
+
+#abox {background-color:yellow;
+	padding:1em;
+	font-weight:bold;
+	position:fixed;
+	width:150px;
+	left:50%;
+	top:40%;
+	margin-left:-50px;}
+
+.unselectable {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}

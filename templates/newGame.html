@@ -13,9 +13,9 @@ maximum turn length
 (does not matter against AI)<br>
 opponent
 <select id="opp">
-{%for oppid,oppname in opponents%}
+<<FOR oppid,oppname IN opponents:
   <option value="<<oppid>>"><<oppname>></option>
-{%endfor%}
+>>
 </select><br>
 Do you want to start?<input type="checkbox" id="turn" > </input><br>
 <input type="button" onclick="send();" value="start game"></input>

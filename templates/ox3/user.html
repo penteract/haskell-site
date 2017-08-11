@@ -23,18 +23,18 @@
 <div id="main">
     <div id="players" style="float:left;width:6em;padding-right:25px">
         <strong>Players</strong><br>
-        {% for playerid,playename,playerscore in players %}
+        <<FOR playerid,playename,playerscore IN players:
         <a href="/3DOX/newGame?player=<<playerid>>"><<playername>></a> (<<playerscore>>)<br>
-        {%endfor%}
+        >>
     </div>
     <div id="games" style="float:left;width:10em">
         <strong>Games</strong><br>
         {% if not games %}
             you are not currently playing any games<br>
         {% endif %}
-        {% for gameid,gameX,gameO in games %}
+        <<FOR gameid,gameX,gameO IN games:
             <a href="/3DOX/game?gameID=<<gameid>>"><<gameX>> vs <<gameO>></a><br>
-        {%endfor%}
+        >>
         <br>
         <input type="text" id="name" value="<<name>>" style="width:6em"></input> 
         <input type="button" onclick="send();" value="change name"></input>
