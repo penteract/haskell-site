@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+--{-# LANGUAGE OverloadedStrings #-}
 
 import Network.Wai hiding(requestHeaders)
 import Network.HTTP.Types
@@ -33,21 +33,19 @@ appmm a1 req respond = do
         ("requestHeaderReferer:"++).show.requestHeaderReferer,
         ("requestHeaderUserAgent:"++).show.requestHeaderUserAgent]
     a1 req respond
-    respond $ responseLBS
+    {-respond $ responseLBS
         status200
         [("Content-Type", "text/plain")]
-        "Hello, Web!"
+        "Hello, Web!"-}
 
 withQuery ::(Query -> Application ) -> Application
-withQuery app = (queryString>>=)app
+withQuery app = queryString >>= app
 
 main :: IO ()
 main = do
     m <- Map.empty
-    putStrLn $ "http://localhost:8080/"
-    run 8080 $ appmm $ (app m =<< queryString)
+    putStrLn "http://localhost:8080/"
+    run 8080 $ appmm $ app m =<< queryString
 
 app :: Map.Map () () -> Query -> Application
 app m q = websocketsOr defaultConnectionOptions (wsApp m q) (pageApp m)
-    
-

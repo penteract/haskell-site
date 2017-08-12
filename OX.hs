@@ -5,8 +5,6 @@ import Tools
 
 import Data.Array
 
-
-
 type Pos = (Int,Int,Int)
 type Line = [Pos]
 
@@ -20,22 +18,22 @@ move :: Pos -> OX -> Status -> Either String (OX,Status)
 move pos (OX board) (IsTurn pl) = do
     "Position not inside grid" `unless` inRange grid pos
     "Cell is not Empty" `unless` (board!pos==' ')
-    
+
     let tok = toSym pl
     let newBoard = board//[(pos,tok)]
     return (newBoard,
-    if any [all [newBoard!x == tok | x<-line] | line <- linesThrough pos]
-       then  (newBoard,Won pl)
-       else if any [newBoard!x==' ' | x<-grid] 
-               then $ IsTurn $ other pl
-               else Draw)
-    
-                              
+        if any [all [newBoard!x == tok | x<-line] | line <- linesThrough pos]
+            then  (newBoard,Won pl)
+            else if any [newBoard!x==' ' | x<-grid]
+                then IsTurn $ other pl
+                else Draw)
 
-instance Game of OX where
+
+
+instance Game OX where
     newGame = OX $ array grid [(i,' ') | i<-range grid]
-    makeMove val g s =
-        
+    makeMove val g s = error ""
+
 
 
 grid :: ((Int,Int,Int),(Int,Int,Int))
@@ -46,7 +44,7 @@ grid = ((0,0,0),(3,3,3))
 trans :: Pos->Pos->Pos
 trans pos@(x,y,z)
     | any (>1) [x,y,z] = zipt (\ x -> if x>1 then (3-) else id) pos
-    | x+y+z>1   = mapt (\x->x+1-(2*(x`mod`2))) 
+    | x+y+z>1   = mapt (\x->x+1-(2*(x`mod`2)))
     | otherwise = \(a,b,c)-> (a-a*x+c*x,b-b*y+c*y,c*(1-x-y)+a*x+b*y)
 
 mapt :: (Int->Int) -> Pos -> Pos

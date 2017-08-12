@@ -1,6 +1,9 @@
 *
 !/**/
 !*.*
+!LICENSE
 *.hi
 *.o
-html/*
+html/
+.stack-work/
+dist/

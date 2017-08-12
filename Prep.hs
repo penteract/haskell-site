@@ -1,15 +1,15 @@
 --module Prep where
 
 import System.Environment
-import System.Directory
-import System.FilePath
-import Data.Char
-import Data.Maybe(fromMaybe)
+--import System.Directory
+--import System.FilePath
+--import Data.Char
+--import Data.Maybe(fromMaybe)
 
 import Template
 --import Data
 
-type FileContents = String
+--type FileContents = String
 
 {-
 -- helper function for making strings nicely

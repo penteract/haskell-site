@@ -6,7 +6,7 @@ import qualified Control.Concurrent.Map as Map
 --import Network.HTTP.Types
 
 pageApp :: Map.Map () () -> Application
-pageApp m _ respond = respond $ responseLBS
+pageApp m request respond = respond $ responseLBS
         status200
         [("Content-Type", "text/plain")]
         "Hello, Web!"

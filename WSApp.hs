@@ -12,7 +12,7 @@ wsApp m q pending_conn = do
     putStrLn (show q)
     putStrLn (show $ requestPath $ pendingRequest pending_conn)
     conn <- acceptRequest pending_conn
-    --forkPingThread conn 30
+    forkPingThread conn 30
     sendTextData conn ("Hello, client!" :: ByteString)
     procRequests m conn
     
