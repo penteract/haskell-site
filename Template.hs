@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module Template(procDir,Value(..),Variable,Valueable(..)) where
+module Template(procDir,Value(..),Variable,Valueable(..),Template) where
 
 --import System.Environment
 import System.Directory
@@ -12,12 +12,8 @@ import Data.Maybe(fromMaybe)
 import qualified Control.Monad as CM
 import Control.Monad.State hiding (unless)
 import Control.Monad.RWS hiding (unless)
---import Control.Monad.Writer
---import Control.Monad.List
 import Control.Monad.Except hiding (unless)
---import Data.Function(on)
 import qualified Data.Map as Map
---import Data.List(unionBy)
 
 --this took too much work
 infix 0 `unless`

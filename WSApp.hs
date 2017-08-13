@@ -7,7 +7,9 @@ import Data.Text(Text)
 import Data.ByteString.Lazy(ByteString)
 import qualified Control.Concurrent.Map as Map
 
-wsApp :: Map.Map () () -> Query -> ServerApp
+import Data(GameStore)
+
+wsApp :: GameStore -> Query -> ServerApp
 wsApp m q pending_conn = do
     putStrLn (show q)
     putStrLn (show $ requestPath $ pendingRequest pending_conn)
@@ -15,9 +17,9 @@ wsApp m q pending_conn = do
     forkPingThread conn 30
     sendTextData conn ("Hello, client!" :: ByteString)
     procRequests m conn
-    
-    
-procRequests :: Map.Map () () -> Connection -> IO ()
+
+
+procRequests :: GameStore -> Connection -> IO ()
 procRequests m conn = do
     dat <- receiveData conn
     putStrLn (show (dat::ByteString))

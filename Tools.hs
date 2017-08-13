@@ -8,5 +8,8 @@ infix 0 `unless`
 unless :: MonadError e m => e -> Bool -> m ()
 unless= flip CM.unless . throwError
 
+assert :: MonadError e m => Bool -> e -> m ()
+assert = flip unless
+
 withError :: MonadError e m => (e->e) -> m a -> m a
 withError f xm = catchError xm (throwError.f)
