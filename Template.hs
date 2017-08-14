@@ -1,6 +1,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module Template(procDir,Value(..),Variable,Valueable(..),Template) where
+module Template(procDir,Value(..),Variable,Valueable(..),Template,Templates) where
 
 --import System.Environment
 import System.Directory
@@ -8,7 +8,7 @@ import System.FilePath
 import Data.Char
 import Data.List
 import Data.Maybe(fromMaybe)
-import Tools(unless,(?+),(??))
+import Tools(unless,(?+),(??),(%))
 
 import qualified Control.Monad as CM
 import Control.Monad.State hiding (unless)
@@ -22,13 +22,7 @@ ifErr :: MonadError e m => m a -> e -> m a
 ifErr xm e = withError (const e) xm-}
 
 type FileContents = String
-
--- helper function for making strings nicely
-(%) :: String -> String -> String
-(%) ('{':'}':s) x = x++s
-(%) ('\\':c:s) xs = c:(s%xs)
-(%) (c:s) xs = c:(s%xs)
-(%) "" _ = error "not enough '{}' in string"
+type Templates = [(FilePath,Template)]
 
 procDir :: [(Variable,Value)]->FilePath->FilePath-> IO ()
 procDir env inDir outDir= do --IO monad
@@ -104,7 +98,7 @@ type Environment = Map.Map Variable Value
 class Valueable a where
     toValue :: a->Value
 
-instance Valueable ([] Char) where
+instance {-# OVERLAPPING  #-} Valueable ([] Char) where
     toValue = Str
 
 instance Valueable a => Valueable [a] where

@@ -9,6 +9,8 @@ import Network.WebSockets hiding(requestHeaders) --(defaultConnectionOptions,acc
 import PageApp(pageApp)
 import WSApp(wsApp)
 import Data (GameStore)
+import Template (Templates)
+
 import qualified Control.Concurrent.Map as Map
 
 --import Template
@@ -38,14 +40,15 @@ appmm a1 req respond = do
         [("Content-Type", "text/plain")]
         "Hello, Web!"-}
 
-withQuery ::(Query -> Application ) -> Application
-withQuery app = queryString >>= app
-
 main :: IO ()
 main = do
     m <- Map.empty
     putStrLn "http://localhost:8080/"
-    run 8080 $ appmm $ app m =<< queryString
+    ts <- loadTemplates
+    run 8080 $ appmm $ app ts m
 
-app :: GameStore-> Query -> Application
-app m q = websocketsOr defaultConnectionOptions (wsApp m q) (pageApp m)
+loadTemplates :: IO Templates
+loadTemplates = undefined
+
+app :: Templates -> GameStore -> Application
+app ts m = websocketsOr defaultConnectionOptions (wsApp m) (pageApp ts m)
