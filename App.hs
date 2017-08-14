@@ -4,7 +4,7 @@ import Network.Wai --
 import Network.HTTP.Types
 import Network.Wai.Handler.Warp (run)
 import Network.Wai.Handler.WebSockets
-import Network.WebSockets hiding(requestHeaders)--(defaultConnectionOptions,acceptRequest,sendTextData,ServerApp)
+import Network.WebSockets hiding(requestHeaders) --(defaultConnectionOptions,acceptRequest,sendTextData,ServerApp)
 --import Data.Text(Text)
 import PageApp(pageApp)
 import WSApp(wsApp)

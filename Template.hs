@@ -8,6 +8,7 @@ import System.FilePath
 import Data.Char
 import Data.List
 import Data.Maybe(fromMaybe)
+import Tools(unless,(?+),(??))
 
 import qualified Control.Monad as CM
 import Control.Monad.State hiding (unless)
@@ -16,22 +17,6 @@ import Control.Monad.Except hiding (unless)
 import qualified Data.Map as Map
 
 --this took too much work
-infix 0 `unless`
-unless :: MonadError e m => e -> Bool -> m ()
-unless= flip CM.unless . throwError
-
-withError :: MonadError e m => (e->e) -> m a -> m a
-withError f xm = catchError xm (throwError.f)
-{-
-infixr ??
-(??) :: MonadError e m => e -> m a -> m a
-(??) = withError.const-}
-
-infixr ?+
-
-(?+):: Monoid e => MonadError e m => e -> m a -> m a
-(?+) = withError.mappend
-
 {-
 ifErr :: MonadError e m => m a -> e -> m a
 ifErr xm e = withError (const e) xm-}
@@ -46,18 +31,18 @@ type FileContents = String
 (%) "" _ = error "not enough '{}' in string"
 
 procDir :: [(Variable,Value)]->FilePath->FilePath-> IO ()
-procDir env inDir outDir= do
+procDir env inDir outDir= do --IO monad
     files <- allFiles inDir
     buildDir inDir outDir
     bodies <- mapM (readFile . (inDir</>)) files
-    let err
-         = do parsed <- mapM (\(n,b)-> ("While parsing "++n++"\n") ?+ (run parse b)) $
+    err <- return (do -- Either String monad
+        parsed <- mapM (\(n,b)-> (run parse b) ?+ ("While parsing "++n++"\n")  ) $
                 zip files bodies
-              let fps = zip files parsed
-              let config=EvalConfig{files=fps,isPrep=True}
-              sequence [(,) fn <$> ("While building "++fn++"\n") ?+
-               (runM (eval tmp) config (Map.fromList env))
-                 | (fn,tmp) <- fps, ((snd$head tmp) /= Template)]
+        let fps = zip files parsed
+        let config=EvalConfig{files=fps,isPrep=True}
+        sequence [(,) fn <$> (runM (eval tmp) config (Map.fromList env) ?+
+          ("While building "++fn++"\n" ))
+             | (fn,tmp) <- fps, ((snd$head tmp) /= Template)])
 
     case err of
         Left e -> putStrLn "Some Error:" >> putStrLn e
@@ -183,8 +168,8 @@ evalT tag@(Print x) = withVal x (show tag) ((tell=<<).lift.printV)
 --     either (if isp then const $ tell $ show $ Print x else lift . Left . id) ((tell=<<).lift.printV) (getVal x env)
     --str <- lift $ getVal x env >>= printV
     --tell str
-evalT (Load fname) = ("in {}\n"%fname) ?+
-    (asks files >>= (lift . getTemplate fname) >>= eval)
+evalT (Load fname) = asks files >>= (lift . getTemplate fname) >>= eval
+    ?+ "in {}\n"%fname
 evalT (Set x t) = do
     val <- censor (const "") $ fmap snd . listen $ eval t
     setV x (Str val)
@@ -252,8 +237,7 @@ parseTag = do
           "FOR" -> parseFor
           "LOAD" -> parseLoad
           "" ->  get >>= throwError.take 20
-          s -> if isLower $ head s then return (Print s)
-                                 else throwError "unrecognised tag"
+          s -> (isLower $ head s)??"unrecognised tag" >> return (Print s)
        <* getStr ">>")
 
 
@@ -304,7 +288,7 @@ strip = dropWhile isSpace
 (|||) :: Parser a -> Parser a -> Parser a
 p1 ||| p2 = do
     s <- get
-    catchError p1 (\e-> put s >>  (e++" neither \n") ?+ p2)
+    catchError p1 (\e-> put s >>  p2 ?+ e++" neither \n")
 
 --finds the longest match, stripping whitespace
 --checks for nonempty matches and finds the last
@@ -323,5 +307,5 @@ getVar = getMatch (((&&).isLower.head) <*> all isAlphaNum)
 
 getStr :: String -> Parser ()
 getStr s = do
-    m <- ("{} expected"%s) ?+ getMatch (`isPrefixOf` s)
-    if m==s then return () else throwError ("{} expected"%s)
+    m <- getMatch (`isPrefixOf` s) ?+ "{} expected"%s
+    m==s ?? "{} expected"%s
