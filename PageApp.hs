@@ -1,13 +1,14 @@
-{-# LANGUAGE OverloadedStrings, FlexibleContexts #-}
+{-# LANGUAGE OverloadedStrings #-}
 module PageApp where
 
 import Data(GameStore)
 import Template
 import Tools
+import Pages
 
 import Data.Char(toLower)
 import Network.Wai
---import Network.HTTP.Types
+--Network.HTTP.Types does not currently export status308
 import Network.HTTP.Types.Status
 import Network.HTTP.Types.Method
 import Network.HTTP.Types.Header
@@ -15,30 +16,27 @@ import qualified Data.Map as Map
 import qualified Control.Concurrent.Map as CMap
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
---import qualified Data.ByteString.Lazy as LB
 import System.FilePath((</>))
---import Network.HTTP.Types()
 
-type Handler = Request -> IO (Templates -> Response)
 type Page = [(Method,Handler)]
-
-homePage :: Handler
-homePage _ = return $ "games.html" `loadWith` [("x", Str "hi")]
-
-loadWith :: FilePath -> [(Variable,Value)] -> Templates -> Response
-loadWith path env ts = fromBoth $ do
-    temp <- ts path ? debug ("template {} not found"%path)
-    case runM (eval temp) (EvalConfig ts False) Map.empty of
-        Left err -> Left $ debug err
-        Right body -> return $ responseLBS ok200 [(hContentType,"text/html")] (CL.pack body)
 
 --cannonise :: String -> String
 cannonise = C.map toLower
 
+--function for rearranging arguments while presenting a wai-style interface
+pageApp :: Templates -> GameStore -> Application
+pageApp ts gs req resp =
+    pageApp' (`lookup` [("/",[(methodGet,homePage)])]) req gs >>= resp.($ts)
 
-debug :: String -> Response
-debug = responseLBS internalServerError500 [("Content-Type","text/plain")]
-    . CL.pack
+--Consider reordering arguments
+pageApp' :: (C.ByteString -> Maybe Page) -> Handler
+pageApp' getPage req = either (return.return.return) ($req) $ do
+    path == cannonicalPath ?? redirect cannonicalPath
+    methodHandlers <- getPage path ? pageNotFound
+    lookup (requestMethod req) methodHandlers ? allow (map fst methodHandlers)
+    where
+        path = rawPathInfo req
+        cannonicalPath = cannonise path
 
 pageNotFound :: Response
 pageNotFound = responseFile notFound404 [("Content-Type","text/html")]
@@ -51,15 +49,3 @@ allow :: [Method] -> Response
 allow methods = responseFile methodNotAllowed405
     [(hAllow, C.intercalate ", " methods),("Content-Type","text/html")]
     ("staticfiles" </> "405.html") Nothing
-
-pageApp :: Templates -> GameStore -> Application
-pageApp ts m = pageApp' ts m (const Nothing)
-
-pageApp' :: Templates -> GameStore -> Lookup C.ByteString Page -> Application
-pageApp' ts gs getPage req resp = either resp (\ a -> a req >>= resp.($ts)) $ do
-    path == cannonicalPath ?? redirect cannonicalPath
-    methodHandlers <- getPage path  ? pageNotFound
-    lookup (requestMethod req) methodHandlers ? allow (map fst methodHandlers)
-    where
-        path = rawPathInfo req
-        cannonicalPath = cannonise path
