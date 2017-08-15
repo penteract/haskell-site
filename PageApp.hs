@@ -1,8 +1,6 @@
 {-# LANGUAGE OverloadedStrings, FlexibleContexts #-}
 module PageApp where
 
-import Prelude hiding(lookup,delete,insert)
-
 import Data(GameStore)
 import Template
 import Tools
@@ -25,7 +23,7 @@ type Handler = Request -> IO (Templates -> Response)
 type Page = [(Method,Handler)]
 
 homePage :: Handler
-homePage _ = return $ "games.html" `loadWith` [("x",toValue ("hi"::String))]
+homePage _ = return $ "games.html" `loadWith` [("x", Str "hi")]
 
 loadWith :: FilePath -> [(Variable,Value)] -> Templates -> Response
 loadWith path env ts = fromBoth $ do
@@ -55,7 +53,7 @@ allow methods = responseFile methodNotAllowed405
     ("staticfiles" </> "405.html") Nothing
 
 pageApp :: Templates -> GameStore -> Application
-pageApp ts m = pageApp' ts m $ lookIn ([] :: [(C.ByteString,Page)])
+pageApp ts m = pageApp' ts m (const Nothing)
 
 pageApp' :: Templates -> GameStore -> Lookup C.ByteString Page -> Application
 pageApp' ts gs getPage req resp = either resp (\ a -> a req >>= resp.($ts)) $ do

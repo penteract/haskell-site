@@ -1,16 +1,14 @@
-{-# LANGUAGE FlexibleInstances #-}
+--{-# LANGUAGE FlexibleInstances #-}
 
-module Template(procDir,Value(..),Variable,Valueable(..),
+module Template(procDir,Value(..),Variable,
     Template,Templates,runM,EvalConfig(..),eval) where
 
-
-import Prelude hiding(lookup)
 
 --import System.Environment
 import System.Directory
 import System.FilePath
 import Data.Char
-import Data.List hiding (lookup,insert,delete)
+import Data.List
 import Data.Maybe(fromMaybe)
 import Tools--(unless,(?+),(??),(%))
 
@@ -98,7 +96,7 @@ showT ((s,t):xs) = s++show t++showT xs
 
 data Value = Str String | Lst [Value]
 type Environment = Map.Map Variable Value
-
+{-
 class Valueable a where
     toValue :: a->Value
 
@@ -109,7 +107,7 @@ instance Valueable a => Valueable [a] where
     toValue = Lst . map toValue
 
 instance Valueable Value where
-    toValue = id
+    toValue = id-}
 
 lookupType :: String -> String -> (String -> Maybe b) -> Either String b
 lookupType typ x lookup =

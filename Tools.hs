@@ -57,6 +57,7 @@ fromBoth a =
 -- a generic typeclass for maps (lets me avoid typing Map.lookup)
 -- and lets me keep functions general
 -- this is too much work (but fun)
+{-
 class Mapping k a m | m -> k a where
     lookup :: Ord k => k -> m -> Maybe a
     insert :: Ord k =>  k -> a -> m -> m
@@ -73,4 +74,4 @@ instance Mapping k a [(k,a)] where
     delete x = filter $ (/=x) . fst
 
 lookIn :: Mapping k a m => Ord k => m -> k -> Maybe a
-lookIn = flip lookup
+lookIn = flip lookup-}

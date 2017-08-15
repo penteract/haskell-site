@@ -7,11 +7,10 @@ import Network.Wai.Handler.WebSockets
 import Network.WebSockets hiding(requestHeaders) --(defaultConnectionOptions,acceptRequest,sendTextData,ServerApp)
 --import Data.Text(Text)
 
-import Tools(lookIn)
 import PageApp(pageApp)
 import WSApp(wsApp)
 import Data (GameStore)
-import Template (Templates,Template)
+import Template (Templates)
 
 import qualified Control.Concurrent.Map as Map
 
@@ -48,7 +47,7 @@ main = do
     run 8080 $ appmm $ app ts m
 
 loadTemplates :: IO Templates
-loadTemplates = return $ lookIn ([]::[(String,Template)])
+loadTemplates = return (const Nothing)
 
 app :: Templates -> GameStore -> Application
 app ts m = queryString >>= (\q ->
