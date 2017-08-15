@@ -9,9 +9,9 @@ import qualified Control.Concurrent.Map as Map
 
 import Data(GameStore)
 
-wsApp :: GameStore -> ServerApp
-wsApp m pending_conn = do
-    --putStrLn (show q)
+wsApp :: GameStore -> Query -> ServerApp
+wsApp m q pending_conn = do
+    putStrLn (show q)
     putStrLn (show $ requestPath $ pendingRequest pending_conn)
     conn <- acceptRequest pending_conn
     forkPingThread conn 30

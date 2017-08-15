@@ -6,10 +6,12 @@ import Network.Wai.Handler.Warp (run)
 import Network.Wai.Handler.WebSockets
 import Network.WebSockets hiding(requestHeaders) --(defaultConnectionOptions,acceptRequest,sendTextData,ServerApp)
 --import Data.Text(Text)
+
+import Tools(lookIn)
 import PageApp(pageApp)
 import WSApp(wsApp)
 import Data (GameStore)
-import Template (Templates)
+import Template (Templates,Template)
 
 import qualified Control.Concurrent.Map as Map
 
@@ -27,8 +29,6 @@ appmm a1 req respond = do
         ("remoteHost:"++).show.remoteHost,
         ("pathInfo:"++).show.pathInfo,
         ("queryString:"++).show.queryString,
-        --("requestBody:"++).show.requestBody,
-        --("vault:"++).show.vault,
         ("requestBodyLength:"++).show.requestBodyLength,
         ("requestHeaderHost:"++).show.requestHeaderHost,
         ("requestHeaderRange:"++).show.requestHeaderRange,
@@ -48,7 +48,8 @@ main = do
     run 8080 $ appmm $ app ts m
 
 loadTemplates :: IO Templates
-loadTemplates = undefined
+loadTemplates = return $ lookIn ([]::[(String,Template)])
 
 app :: Templates -> GameStore -> Application
-app ts m = websocketsOr defaultConnectionOptions (wsApp m) (pageApp ts m)
+app ts m = queryString >>= (\q ->
+    websocketsOr defaultConnectionOptions (wsApp m q) (pageApp ts m))

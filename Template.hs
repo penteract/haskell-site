@@ -1,14 +1,18 @@
 {-# LANGUAGE FlexibleInstances #-}
 
-module Template(procDir,Value(..),Variable,Valueable(..),Template,Templates) where
+module Template(procDir,Value(..),Variable,Valueable(..),
+    Template,Templates,runM,EvalConfig(..),eval) where
+
+
+import Prelude hiding(lookup)
 
 --import System.Environment
 import System.Directory
 import System.FilePath
 import Data.Char
-import Data.List
+import Data.List hiding (lookup,insert,delete)
 import Data.Maybe(fromMaybe)
-import Tools(unless,(?+),(??),(%))
+import Tools--(unless,(?+),(??),(%))
 
 import qualified Control.Monad as CM
 import Control.Monad.State hiding (unless)
@@ -22,7 +26,7 @@ ifErr :: MonadError e m => m a -> e -> m a
 ifErr xm e = withError (const e) xm-}
 
 type FileContents = String
-type Templates = [(FilePath,Template)]
+type Templates = FilePath -> Maybe Template
 
 procDir :: [(Variable,Value)]->FilePath->FilePath-> IO ()
 procDir env inDir outDir= do --IO monad
@@ -33,7 +37,7 @@ procDir env inDir outDir= do --IO monad
         parsed <- mapM (\(n,b)-> (run parse b) ?+ ("While parsing "++n++"\n")  ) $
                 zip files bodies
         let fps = zip files parsed
-        let config=EvalConfig{files=fps,isPrep=True}
+        let config=EvalConfig{files= flip lookup $ fps,isPrep=True}
         sequence [(,) fn <$> (runM (eval tmp) config (Map.fromList env) ?+
           ("While building "++fn++"\n" ))
              | (fn,tmp) <- fps, ((snd$head tmp) /= Template)])
@@ -107,9 +111,9 @@ instance Valueable a => Valueable [a] where
 instance Valueable Value where
     toValue = id
 
-lookupType :: String -> String -> [(String,b)] -> Either String b
-lookupType typ x env =
-    fromMaybe (Left ("{} '{}' not found"%typ%x)) (Right <$> lookup x env)
+lookupType :: String -> String -> (String -> Maybe b) -> Either String b
+lookupType typ x lookup =
+    fromMaybe (Left ("{} '{}' not found"%typ%x)) (Right <$> lookup x)
 
 getVal :: Variable -> Environment -> Either String Value
 getVal v env = fromMaybe (Left ("Variable '{}' not found"%v)) (Right <$> Map.lookup v env)
@@ -121,11 +125,11 @@ printV :: Value -> Either String String
 printV (Str s) = Right s
 printV _ = Left "Value is not a string"
 
-getTemplate :: FilePath -> [(FilePath,Template)] -> Either String Template
+getTemplate :: FilePath -> Templates -> Either String Template
 getTemplate = lookupType "Template"
 
 data EvalConfig = EvalConfig{
-    files :: [(FilePath,Template)],
+    files :: Templates,
     isPrep :: Bool
     }
 
