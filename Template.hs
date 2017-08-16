@@ -1,7 +1,5 @@
---{-# LANGUAGE FlexibleInstances #-}
-
 module Template(procDir,Value(..),Variable,
-    Template,Templates,runM,EvalConfig(..),eval) where
+    Template,Templates,runM,EvalConfig(..),eval,loadTemplates) where
 
 
 --import System.Environment
@@ -28,22 +26,40 @@ type Templates = FilePath -> Maybe Template
 
 procDir :: [(Variable,Value)]->FilePath->FilePath-> IO ()
 procDir env inDir outDir= do --IO monad
-    files <- allFiles inDir
+    allFiles inDir >>= putStrLn.show
     buildDir inDir outDir
-    bodies <- mapM (readFile . (inDir</>)) files
-    err <- return (do -- Either String monad
-        parsed <- mapM (\(n,b)-> (run parse b) ?+ ("While parsing "++n++"\n")  ) $
-                zip files bodies
-        let fps = zip files parsed
-        let config=EvalConfig{files= flip lookup $ fps,isPrep=True}
+    parsed <- loadTemplates inDir
+    let err = do
+            fps <- parsed
+            let config=EvalConfig{files = flip lookup fps,isPrep=True}
+            sequence [(,) fn <$> (runM (eval tmp) config (Map.fromList env) ?+
+              ("While building "++fn++"\n" ))
+                 | (fn,tmp) <- fps, (snd $ head tmp) /= Template]
+    {-
+    err <- loadTemplates inDir fnames >>=  return . (=<<) (\fps ->
+        let config=EvalConfig{files = flip lookup fps,isPrep=True} in
         sequence [(,) fn <$> (runM (eval tmp) config (Map.fromList env) ?+
           ("While building "++fn++"\n" ))
-             | (fn,tmp) <- fps, ((snd$head tmp) /= Template)])
+             | (fn,tmp) <- fps, (snd $ head tmp) /= Template])-}
 
     case err of
         Left e -> putStrLn "Some Error:" >> putStrLn e
         Right fbs -> mapM_ (uncurry $ writeFile.(outDir</>)) fbs
-    putStrLn (show files )
+
+loadTemplates :: FilePath -> IO (Either String [(FilePath,Template)])
+loadTemplates baseDir = allFiles baseDir >>= (\paths -> (\bodies ->
+    (zip paths bodies `forM` (\(n,b)->
+        (,) n <$> run parse b ?+ "While parsing "++n++"\n")))
+    <$> mapM (readFile . (baseDir</>)) paths)
+{-
+    do -- IO monad
+    bodies <- mapM readFile paths
+
+    return $ do -- Either String monad
+        parsed <- mapM (\(n,b)-> run parse b ?+ "While parsing "++n++"\n"  ) $
+            zip paths bodies
+        return $ flip lookup $ zip paths parsed-}
+
 
 --Given 2 directories, creates subdirectories in the second to match the structure of the first
 buildDir :: FilePath -> FilePath -> IO ()
@@ -66,7 +82,7 @@ allFiles p = do
   contents <- filter ((/='.').head) `fmap` getDirectoryContents p
   concat <$> mapM (\ d -> do
       isDir <- doesDirectoryExist (p</>d)
-      if isDir then (map (d </>)) <$> allFiles (p</>d) else return [d]
+      if isDir then map (d </>) <$> allFiles (p</>d) else return [d]
     ) contents
 
 
@@ -158,7 +174,8 @@ withVal var name f = do
 
 evalT :: Tag -> M ()
 evalT Template =  return ()
-evalT tag@(Print x) = withVal x (show tag) ((tell=<<).lift.printV)
+--evalT tag@(Print x) = withVal x (show tag) ((tell=<<).lift.printV)
+evalT tag@(Print x) = fromMaybe (Str "") <$> (gets (Map.lookup x)) >>= ((tell=<<).lift.printV)
 --     env <- get
 --     isp <- asks isPrep
 --     either (if isp then const $ tell $ show $ Print x else lift . Left . id) ((tell=<<).lift.printV) (getVal x env)
@@ -169,16 +186,18 @@ evalT (Load fname) = asks files >>= (lift . getTemplate fname) >>= eval
 evalT (Set x t) = do
     val <- censor (const "") $ fmap snd . listen $ eval t
     setV x (Str val)
-evalT tag@(For xName yName t) = withVal yName (show tag) (\y -> do
+evalT tag@(For xName yName t) = do
+    y <- fromMaybe (Lst []) <$> (gets (Map.lookup yName))
     yl <- (case y of
         Lst l -> return l
         _ -> throwError ("trying to iterate over {} which is not a list"%yName))
-    evalFor yName t [xName] [Lst [x] | x <- yl])
-evalT tag@(Fors vars yName t) = withVal yName (show tag) (\y -> do
+    evalFor yName t [xName] [Lst [x] | x <- yl]
+evalT tag@(Fors vars yName t) = do
+    y <- fromMaybe (Lst []) <$> (gets (Map.lookup yName))
     yl <- (case y of
         Lst l -> return l
         _ -> throwError ("trying to iterate over {} which is not a list"%yName))
-    evalFor yName t vars yl)
+    evalFor yName t vars yl
 evalT End = return ()
 
 evalFor :: String -> Template -> [Variable] -> [Value] -> M ()

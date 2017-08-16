@@ -25,7 +25,7 @@ debug = responseLBS internalServerError500 [("Content-Type","text/plain")]
 loadWith :: FilePath -> [(Variable,Value)] -> Templates -> Response
 loadWith path env ts = fromBoth $ do
     temp <- ts path ? debug ("template {} not found"%path)
-    case runM (eval temp) (EvalConfig ts False) Map.empty of
+    case runM (eval temp) (EvalConfig ts False) (Map.fromList env) of
         Left err -> Left $ debug err
         Right body -> return $
             responseLBS ok200 [(hContentType,"text/html")] (CL.pack body)
@@ -33,7 +33,8 @@ loadWith path env ts = fromBoth $ do
 
 homePage :: Handler
 homePage _ _ = return $ "games.html" `loadWith` [
-    ("games", Lst [Lst [Str tag, Str name, Lst []] | GameInfo{tag=tag,name=name} <- games])]
+    ("gameList", Lst [Lst [Str tag, Str name, Lst []] | GameInfo{tag=tag,name=name} <- games]),
+    ("path",Lst [Lst[Str "/" ,Str "home"]])]
 
 newGamePage :: GameHandler
 newGamePage g req gs = do

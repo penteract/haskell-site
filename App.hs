@@ -10,7 +10,8 @@ import Network.WebSockets hiding(requestHeaders) --(defaultConnectionOptions,acc
 import PageApp(pageApp)
 import WSApp(wsApp)
 import Data (GameStore)
-import Template (Templates)
+import Template (Templates,loadTemplates)
+import Tools(lookIn)
 
 import qualified Control.Concurrent.Map as Map
 
@@ -43,11 +44,10 @@ main :: IO ()
 main = do
     m <- Map.empty
     putStrLn "http://localhost:8080/"
-    ts <- loadTemplates
-    run 8080 $ appmm $ app ts m
-
-loadTemplates :: IO Templates
-loadTemplates = return (const Nothing)
+    ts' <- ((lookIn$) <$>) <$> loadTemplates "html"
+    case ts' of
+        Right ts -> run 8080 $ appmm $ app ts m
+        Left e -> putStrLn e
 
 app :: Templates -> GameStore -> Application
 app ts m = queryString >>= (\q ->

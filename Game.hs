@@ -1,5 +1,3 @@
---{-# LANGUAGE OverloadedStrings #-}
---{-# LANGUAGE GADTs #-}
 module Game(Player(..),other,Game(..),MetaData(..),Status(..),PlayerID,GameID) where
 
 import Data.Aeson(ToJSON(..),Value,object)
