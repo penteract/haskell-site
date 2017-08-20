@@ -27,7 +27,7 @@ infixl 1 ?+
 (?+) = flip $ withError.mappend
 
 assert :: MonadError e m => Bool -> e -> m ()
-assert = flip unless
+assert = flip (flip CM.unless . throwError)--flip unless
 
 infixl 1 ??
 (??) :: MonadError e m => Bool -> e -> m ()

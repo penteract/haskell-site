@@ -246,14 +246,14 @@ parse' (c:rs) = do
 parseTag :: Parser Tag
 parseTag = do
      tok <- getMatch (all isAlphaNum)
-     (case tok of
+     case tok of
           "TEMPLATE" ->return Template
           "SET" -> parseSet
           "FOR" -> parseFor
           "LOAD" -> parseLoad
           "" ->  get >>= throwError.take 20
           s -> (isLower $ head s)??"unrecognised tag" >> return (Print s)
-       <* getStr ">>")
+       <* getStr ">>"
 
 
 parseLoad :: Parser Tag

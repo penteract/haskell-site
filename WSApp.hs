@@ -7,9 +7,9 @@ import Data.Text(Text)
 import Data.ByteString.Lazy(ByteString)
 import qualified Control.Concurrent.Map as Map
 
-import Data(GameStore)
+import Data(GameStoreList)
 
-wsApp :: GameStore -> Query -> ServerApp
+wsApp :: GameStoreList -> Query -> ServerApp
 wsApp m q pending_conn = do
     putStrLn (show q)
     putStrLn (show $ requestPath $ pendingRequest pending_conn)
@@ -19,7 +19,7 @@ wsApp m q pending_conn = do
     procRequests m conn
 
 
-procRequests :: GameStore -> Connection -> IO ()
+procRequests :: GameStoreList -> Connection -> IO ()
 procRequests m conn = do
     dat <- receiveData conn
     putStrLn (show (dat::ByteString))

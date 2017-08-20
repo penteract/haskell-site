@@ -1,4 +1,5 @@
-module Game(Player(..),other,Game(..),MetaData(..),Status(..),PlayerID,GameID) where
+module Game(Player(..),other,Game(..),MetaData(..),Status(..),newMD,
+    PlayerID,GameID) where
 
 import Data.Aeson(ToJSON(..),Value,object)
 import Data.Text(pack)
@@ -6,7 +7,9 @@ import Data.Aeson.Types(Pair)
 import Data.Bits((.&.))
 --import Control.Monad.State
 import Network.WebSockets(Connection)
---import Data.ByteString(ByteString)
+import Data.ByteString(ByteString,unpack)
+import Data.Int
+import System.Posix.Time
 
 class Game g where
     --makeMove assumes the move is made by the player whose turn it is
@@ -15,8 +18,8 @@ class Game g where
     newGame :: g
 
 
-type PlayerID = String
-type GameID = String
+type PlayerID = ByteString
+type GameID = ByteString
 
 
 data MetaData = MD {
@@ -24,12 +27,29 @@ data MetaData = MD {
     player1 :: PlayerID,
     listeners :: [Connection],
     gid :: GameID,
-    status :: Status}--OK, turn technically isn't metadata
+    lastMove :: Int,
+    status :: Status}--OK, turn isn't really metadata
 
+newMD :: PlayerID -> PlayerID -> GameID -> IO MetaData
+newMD pl0 pl1 gid = do
+    t <- fromEnum <$> epochTime --systemSeconds<$>getSystemTime
+    return MD{
+        player0   = pl0,
+        player1   = pl1,
+        listeners = [],
+        gid       = gid,
+        lastMove  = t,
+        status    = Unstarted}
 
+instance ToJSON ByteString where
+    toJSON b = toJSON $ unpack b
 
 (.:) :: ToJSON b => String->b->Pair
 a .: b = (pack a,toJSON b)
+
+
+--(.::) :: ToJSON b => String->b->Pair
+--a .:: b = (pack a,toJSON $ unpack b)
 
 updateMsg :: Game g => g -> MetaData -> Value
 updateMsg gg dat  = object

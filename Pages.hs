@@ -1,22 +1,64 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Pages(Handler,homePage) where
+module Pages(Handler,GameHandler,
+    request,gameStore,
+    homePage,newGameh) where
 
 import Network.Wai
 import Template
 import Tools
 import Data
 
-import Network.HTTP.Types.Status
-import Network.HTTP.Types.Header
+import Network.HTTP.Types
 import Control.Concurrent.MVar
 import qualified Control.Concurrent.Map as CMap
---import qualified Data.ByteString.Char8 as C
+import Control.Monad.Reader hiding (unless)
+import Control.Monad.State hiding (unless)
+import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.Map as Map
+import Data.Char
+import System.Random
+
+--type Handler =  Request -> GameStore -> IO (Templates -> Response)
+
+--type ($) a b = a b
+
+type HandlerM = ReaderT (Request,GameStoreList) (StateT (Maybe StdGen) IO)
+
+type Handler = HandlerM (Templates -> Response)
+
+type GameHandler g = GameStore g -> HandlerM (Templates -> Response)
+
+request :: HandlerM Request
+request = fst<$>ask
+askQuery :: HandlerM Query
+askQuery = queryString <$>  request
+
+getParam :: C.ByteString -> HandlerM (Maybe C.ByteString)
+getParam p = (join . lookup p) <$> askQuery
+
+gameStore :: HandlerM GameStoreList
+gameStore = snd<$>ask
+
+--getCurrentPlayer :: HM (Maybe C.ByteString)
+--getCurrentPlayer = (join . lookup "player") <$> askQuery
 
 
-type Handler =  Request -> GameStore -> IO (Templates -> Response)
-type GameHandler = GameInfo -> Request -> GameStore -> IO (Templates -> Response)
+--Avoids performing IO actions that require synchronisation if possible
+randomInt :: HandlerM Int
+randomInt = do
+    gen <- maybe (lift$lift newStdGen) return =<< get
+    let (result,nextRandom) = next gen
+    put (Just nextRandom)
+    return result
+
+randomChar :: HandlerM Char
+randomChar = ((['a'..'z']++['A'..'Z']++['0'..'9']++['/','+'])!!)
+    <$> (`mod`64) <$> randomInt --26+26+10+2=64
+    --(chr.(+65).(`mod` 64)) <$> randomInt
+
+randomString :: HandlerM C.ByteString
+randomString = C.pack <$> mapM (const randomChar) [1..20]
 
 debug :: String -> Response
 debug = responseLBS internalServerError500 [("Content-Type","text/plain")]
@@ -32,14 +74,22 @@ loadWith path env ts = fromBoth $ do
 
 
 homePage :: Handler
-homePage _ _ = return $ "games.html" `loadWith` [
+homePage = return $ "games.html" `loadWith` [
     ("gameList", Lst [Lst [Str tag, Str name, Lst []] | GameInfo{tag=tag,name=name} <- games]),
     ("path",Lst [Lst[Str "/" ,Str "home"]])]
 
-newGamePage :: GameHandler
-newGamePage g req gs = do
-    sg <- (newMVar $ newGame g "pl0" "pl1" gid)
-    CMap.insert gid sg gs
+lift' = lift.lift
+
+newGameh :: Game g => GameHandler g
+newGameh store = do
+    playerID <- getParam "playerID" >>= maybe randomString return
+    oppId <- getParam "opp" >>= maybe randomString return
+    gid <- randomString
+
+    --sg <- (lift $ lift $ (newMVar $ (newGame,newMD "pl0" "pl1" gid)) :: HM (MVar (g, MetaData)))
+    md <- lift' $ newMD playerID oppId gid
+    sg <- lift' $ newMVar (newGame,md)
+    lift' $ CMap.insert gid sg store
     return $ const $ debug "unimp"
     where
         gid = "gameID"

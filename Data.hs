@@ -1,4 +1,7 @@
-module Data(games,GameStore(..),GameInfo(..)) where
+module Data(PlayerID, GameID, MetaData(..), newMD,
+    GameStore(..), GameStoreList(..), Game.Game(..),
+    GameInfo(..), games)
+    where
 
 import OX
 import qualified Game
@@ -12,15 +15,29 @@ import qualified Control.Concurrent.Map as Map
 --Generalised game, a wrapper around different game types
 data GGame = OXG OX MetaData  -- | EnsquaredG MetaData Ensquared
 
-type GameStore = Map.Map GameID (MVar GGame)
+type GameStore g = Map.Map GameID (MVar (g,MetaData))
+
+data GameStoreList = GSL {
+    getOXStore ::GameStore OX
+}
 
 data GameInfo = GameInfo{
     tag :: String,
-    name :: String,
-    makeMove :: String -> GGame -> Either String GGame,
-    getData :: GGame -> Value,
-    newGame :: PlayerID -> PlayerID -> GameID -> GGame
+    name :: String
+    --makeMove :: String -> GGame -> Either String GGame,
+    --getData :: GGame -> Value,
+    --newGame :: PlayerID -> PlayerID -> GameID -> GGame
 }
+
+
+{-IDEA: create a typeclass KnownGame that
+
+typeclass Game g => KnownGame g where
+    getStore :: GameStoreList -> GameStore g
+
+
+-}
+
 --(...) ::
 
 --newGame :: String -> Maybe GGame
@@ -28,7 +45,7 @@ data GameInfo = GameInfo{
 
 ox = GameInfo{
     tag      = "ox3",
-    name     = "3D Noughts and Crosses",
+    name     = "3D Noughts and Crosses"{-,
     makeMove = \pos (OXG game md) -> --unsafe pattern match
         (\(g,s) -> OXG g (md{status=s}) ) <$> Game.makeMove pos game (status md),
     getData  = (\ (OXG game _) -> Game.getData game),
@@ -37,8 +54,7 @@ ox = GameInfo{
         player1   = pl1,
         listeners = [],
         gid       = gid,
-        status    = Unstarted
-    }
+        status    = Unstarted-}
 }
 
 games = [ox]

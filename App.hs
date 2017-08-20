@@ -2,14 +2,14 @@
 
 import Network.Wai --
 import Network.HTTP.Types
-import Network.Wai.Handler.Warp (run)
+import Network.Wai.Handler.Warp (runSettings, setPort, setFdCacheDuration, defaultSettings)
 import Network.Wai.Handler.WebSockets
 import Network.WebSockets hiding(requestHeaders) --(defaultConnectionOptions,acceptRequest,sendTextData,ServerApp)
 --import Data.Text(Text)
 
 import PageApp(pageApp)
 import WSApp(wsApp)
-import Data (GameStore)
+import Data (GameStoreList(GSL))
 import Template (Templates,loadTemplates)
 import Tools(lookIn)
 
@@ -42,13 +42,16 @@ appmm a1 req respond = do
 
 main :: IO ()
 main = do
-    m <- Map.empty
-    putStrLn "http://localhost:8080/"
-    ts' <- ((lookIn$) <$>) <$> loadTemplates "html"
+    m <- GSL <$> Map.empty
+    putStrLn $ "http://localhost:"++show port ++"/"
+    ts' <- ((lookIn$) <$>) <$> loadTemplates "templates"
     case ts' of
-        Right ts -> run 8080 $ appmm $ app ts m
+        Right ts -> runSettings settings $ appmm $ app ts m
         Left e -> putStrLn e
+    where
+        port=8080
+        settings = setPort port $ setFdCacheDuration 10 $ defaultSettings
 
-app :: Templates -> GameStore -> Application
+app :: Templates -> GameStoreList -> Application
 app ts m = queryString >>= (\q ->
     websocketsOr defaultConnectionOptions (wsApp m q) (pageApp ts m))
