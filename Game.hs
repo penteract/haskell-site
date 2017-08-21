@@ -16,6 +16,7 @@ class Game g where
     makeMove :: String -> g -> Status -> Either String (g,Status)
     getData :: g -> Value
     newGame :: g
+    ais :: String -> Maybe (g -> Either String g)
 
 
 type PlayerID = ByteString

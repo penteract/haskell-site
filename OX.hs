@@ -40,6 +40,7 @@ instance Game OX where
     makeMove pos g s =
         getPos pos >>= (\ p -> move p g s)
     getData (OX arr) = toJSON $ elems arr
+    ais = lookIn []
 
 getPos :: String -> Either String (Int,Int,Int)
 getPos pos = fromMaybe (Left "Bad position format") (do

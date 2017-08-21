@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module PageApp where
 
-import Data(GameStoreList(..),GameStore,Game)
+import Data(GameStoreList(..),GameStore,Game,ox)
 import Template
 import Tools
 import Pages
@@ -17,8 +17,9 @@ import qualified Data.Map as Map
 import qualified Control.Concurrent.Map as CMap
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
-import Control.Monad.Reader(runReaderT)
+import Control.Monad.Reader(runReaderT,join)
 import Control.Monad.State(evalStateT)
+import Control.Monad.Except(runExceptT)
 import System.FilePath((</>))
 import System.Random
 
@@ -39,7 +40,7 @@ globalPages = [
 procPages :: Game g => (GameStoreList -> GameStore g) -> C.ByteString ->
     [(C.ByteString, [(Method, Handler)])]
 procPages getS tag = [(C.concat[tag,"/",path],
-    [(meth,(getS<$> gameStore) >>= h)
+    [(meth,(getS<$> gameStore) >>= h ox)
         | (meth,h)<-hs])
     | (path,hs) <- perGamePages]
 
@@ -55,22 +56,25 @@ perGamePages = [
 --function for rearranging arguments while presenting a wai-style interface
 pageApp :: Templates -> GameStoreList -> Application
 pageApp ts gs req resp =
-    evalStateT (runReaderT (pageApp' pageList) (req,gs)) Nothing >>= resp.($ts)
+    evalStateT (runReaderT (runExceptT (pageApp' pageList)) (req,gs)) Nothing >>= ret
+    where
+        ret (Left p)  = resp p
+        ret (Right h) = resp (h ts)
 
 --Consider reordering arguments
 pageApp' :: (C.ByteString -> Maybe Page) -> Handler
-pageApp' getPage = do
-  req <- request
-  let path = rawPathInfo req
-      spath = C.unpack path
-      cannonicalPath = cannonise path
-      method = requestMethod req
-  either (return.return) (id) $ do --Either Resp monad
+pageApp' getPage = do --HandlerM
+    req <- request
+    let path = rawPathInfo req
+        spath = C.unpack path
+        cannonicalPath = cannonise path
+        method = requestMethod req
+  --either (return.return) (id) $ do --Either Resp monad
     path == cannonicalPath ?? redirect cannonicalPath
     not ("/staticfiles" `isPrefixOf` spath && method==methodGet) ??
         staticFile (tail spath)
     methodHandlers <- getPage path ? pageNotFound
-    lookup (requestMethod req) methodHandlers ? allow (map fst methodHandlers)
+    join $ lookup (requestMethod req) methodHandlers ? allow (map fst methodHandlers)
 
 staticFile :: String -> Response
 staticFile path = responseFile status200 [] path Nothing

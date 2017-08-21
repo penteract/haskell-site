@@ -1,6 +1,7 @@
 module Data(PlayerID, GameID, MetaData(..), newMD,
     GameStore(..), GameStoreList(..), Game.Game(..),
-    GameInfo(..), games)
+    Status(..),Player(..),
+    GameInfo(..), games, ox)
     where
 
 import OX
@@ -44,8 +45,8 @@ typeclass Game g => KnownGame g where
 --newGame "ox3" n = OXG ... MD newGame
 
 ox = GameInfo{
-    tag      = "ox3",
-    name     = "3D Noughts and Crosses"{-,
+    tag     = "ox3",
+    name    = "3D Noughts and Crosses"{-,
     makeMove = \pos (OXG game md) -> --unsafe pattern match
         (\(g,s) -> OXG g (md{status=s}) ) <$> Game.makeMove pos game (status md),
     getData  = (\ (OXG game _) -> Game.getData game),
