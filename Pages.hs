@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Pages(Handler,GameHandler,
     request,gameStore,
-    homePage,newGameh) where
+    homePage,newGameh,waitPage) where
 
 import Network.Wai
 import Template
@@ -89,7 +89,7 @@ lift' = lift.lift.lift
 newGameh :: Game g => GameHandler g
 newGameh info store = do
     playerID <- randomString --getParam "playerID" >>= maybe randomString return
-    opp <-getParam "opp" >>= (? badRequest)
+    opp <- getParam "opp" >>= (? badRequest)
     gid <- randomString
     turn <- getParam "turn"
     let (pl0, pl1) =
@@ -99,12 +99,12 @@ newGameh info store = do
     (gameState,rdUrl) <- case C.unpack opp of
         "y" -> do
             return ((newGame,md),
-                C.concat ["/wait?gameID=",gid,"&playerID=",playerID])
+                CL.concat ["wait?gameID=",CL.fromStrict gid,"&playerID=",CL.fromStrict playerID])
         "r" -> do
             throwError $ debug "'next to press this button' unimplemented"
             -- <- CMap.lookup "r"
             --return ("x ",concat ["/wait?gameID=",gid,"&playerID=",])
-        ('a':' ':diff) -> (flip (,) $ C.concat ["/play?gameID=",gid,"&playerID=",playerID]) <$>
+        ('a':' ':diff) -> (flip (,) $ CL.fromStrict (C.concat ["play?gameID=",gid,"&playerID=",playerID])) <$>
             case ais diff of
                 Just a ->
                     if pl0==opp then do
@@ -117,6 +117,17 @@ newGameh info store = do
     --sg <- (lift $ lift $ (newMVar $ (newGame,newMD "pl0" "pl1" gid)) :: HM (MVar (g, MetaData)))
     sg <- lift' $ newMVar gameState
     lift' $ CMap.insert gid sg store
-    return $ const $ debug "unimp"
+    return $ const $ responseLBS ok200 [] (CL.concat
+        [CL.pack (tag info), "/", rdUrl])
+    --return $ const $ debug "unimp"
     where
         gid = "gameID"
+
+getThings :: [C.ByteString] -> HandlerM [(Variable,Value)]
+getThings = mapM (\s -> do
+    val <- getParam s >>= (? badRequest)
+    return (C.unpack s, Str $ C.unpack val) ) -- This will probably change to use bytestrings
+
+waitPage :: Game g => GameHandler g
+waitPage info store = do
+    loadWith "wait.html" <$> getThings ["playerID", "gameID"]

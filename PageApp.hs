@@ -17,7 +17,7 @@ import qualified Data.Map as Map
 import qualified Control.Concurrent.Map as CMap
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
-import Control.Monad.Reader(runReaderT,join)
+import Control.Monad.Reader(runReaderT,join,lift)
 import Control.Monad.State(evalStateT)
 import Control.Monad.Except(runExceptT)
 import System.FilePath((</>))
@@ -28,9 +28,10 @@ type Page = [(Method,Handler)]
 --cannonise :: String -> String
 cannonise = C.map toLower
 
-pageList :: C.ByteString -> Maybe Page
-pageList = lookIn ([("/",[(methodGet,homePage)])] ++
-    concat [ procPages getOXStore "ox3" ])
+--pageList :: C.ByteString -> Maybe Page
+pageList =  ([("/",[(methodGet,homePage)])] ++
+    concat [procPages getOXStore "ox3" ])
+
 
 
 globalPages :: [(C.ByteString, [(Method,Handler)])]
@@ -39,14 +40,15 @@ globalPages = [
 
 procPages :: Game g => (GameStoreList -> GameStore g) -> C.ByteString ->
     [(C.ByteString, [(Method, Handler)])]
-procPages getS tag = [(C.concat[tag,"/",path],
+procPages getS tag = [(C.concat["/",tag,"/",path],
     [(meth,(getS<$> gameStore) >>= h ox)
         | (meth,h)<-hs])
     | (path,hs) <- perGamePages]
 
 perGamePages :: Game g => [(C.ByteString, [(Method, GameHandler g)])]
 perGamePages = [
-    ("newgame",[(methodPost,newGameh)])
+    ("new",[(methodPost,newGameh)]),
+    ("wait",[(methodGet,waitPage)])
     ]
 
 --[([Char],GameHandler g)]
@@ -56,7 +58,7 @@ perGamePages = [
 --function for rearranging arguments while presenting a wai-style interface
 pageApp :: Templates -> GameStoreList -> Application
 pageApp ts gs req resp =
-    evalStateT (runReaderT (runExceptT (pageApp' pageList)) (req,gs)) Nothing >>= ret
+    evalStateT (runReaderT (runExceptT (pageApp' (lookIn pageList))) (req,gs)) Nothing >>= ret
     where
         ret (Left p)  = resp p
         ret (Right h) = resp (h ts)
@@ -64,6 +66,7 @@ pageApp ts gs req resp =
 --Consider reordering arguments
 pageApp' :: (C.ByteString -> Maybe Page) -> Handler
 pageApp' getPage = do --HandlerM
+    --lift$lift$lift (putStrLn$unlines (map (C.unpack.fst) pageList))
     req <- request
     let path = rawPathInfo req
         spath = C.unpack path
