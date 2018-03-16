@@ -81,5 +81,5 @@ linesThrough (0,0,1) = [(0,0,step) | step<-[0..3]]:
   [ [(step*dx,step*dy,1) | step <- [0..3]]
     | (dx,dy) <- tail $ range ((0,0),(1,1))]
 
-linesThrough p = map (map t) $ linesThrough (t p) where
-    t = trans p
+linesThrough p = map (map t) $ linesThrough (t p)
+    where t = trans p

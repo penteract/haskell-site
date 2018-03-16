@@ -1,5 +1,5 @@
 module Game(Player(..),other,Game(..),MetaData(..),Status(..),newMD,
-    PlayerID,GameID) where
+    PlayerID,GameID,gameURL) where
 
 import Data.Aeson(ToJSON(..),Value,object)
 import Data.Text(pack)
@@ -10,6 +10,7 @@ import Network.WebSockets(Connection)
 import Data.ByteString(ByteString,unpack)
 import Data.Int
 import System.Posix.Time
+import Tools
 
 class Game g where
     --makeMove assumes the move is made by the player whose turn it is
@@ -45,8 +46,8 @@ newMD pl0 pl1 gid = do
 instance ToJSON ByteString where
     toJSON b = toJSON $ unpack b
 
-(.:) :: ToJSON b => String->b->Pair
-a .: b = (pack a,toJSON b)
+--(.:) :: ToJSON b => String->b->Pair
+--a .: b = (pack a,toJSON b)
 
 
 --(.::) :: ToJSON b => String->b->Pair
@@ -83,9 +84,9 @@ instance Enum Status where
 
     fromEnum (Won p) = sTARTED+gAMEOVER+tURN*(fromEnum p)
     fromEnum (IsTurn p) = sTARTED+tURN*(fromEnum p)
-    fromEnum (Timeout p) = tIMEUP + gAMEOVER + tURN*(fromEnum p)
+    fromEnum (Timeout p) = sTARTED + tIMEUP + gAMEOVER + tURN*(fromEnum p)
     fromEnum Unstarted = 0
-    fromEnum Draw = gAMEOVER + dRAW
+    fromEnum Draw = sTARTED + gAMEOVER + dRAW
 
 sTARTED=4
 aIP=2
@@ -93,5 +94,8 @@ gAMEOVER=8
 dRAW=16
 tURN=1
 tIMEUP=32
+
+gameURL :: MetaData -> String -> Int -> String--should this be in Data?
+gameURL (MD{gid=n,player0=pl0,player1=pl1}) gname pl = "/{}/play?gameID={}"%gname%show n ++ if pl>1 || pl<0 then "" else "&playerID={}"%show ([pl0,pl1]!!pl)
 
 --instance Game g => Game (StoredGame g) where

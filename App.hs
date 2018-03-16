@@ -19,7 +19,7 @@ import qualified Control.Concurrent.Map as Map
 
 appmm :: Middleware
 appmm a1 req respond = do
-    putStrLn $ unlines $ map ($req)  [
+    putStrLn $ unlines $ map ($req)  [const "",
         ("requestMethod:"++).show.requestMethod,
         ("httpVersion:"++).show.httpVersion,
         ("rawPathInfo:"++).show.rawPathInfo,
@@ -34,7 +34,7 @@ appmm a1 req respond = do
         ("requestHeaderRange:"++).show.requestHeaderRange,
         ("requestHeaderReferer:"++).show.requestHeaderReferer,
         ("requestHeaderUserAgent:"++).show.requestHeaderUserAgent]
-    a1 req respond
+    a1 req (\resp -> putStrLn (show$ responseStatus resp) >> respond resp)
     {-respond $ responseLBS
         status200
         [("Content-Type", "text/plain")]

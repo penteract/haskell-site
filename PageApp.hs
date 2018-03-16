@@ -48,7 +48,10 @@ procPages getS tag = [(C.concat["/",tag,"/",path],
 perGamePages :: Game g => [(C.ByteString, [(Method, GameHandler g)])]
 perGamePages = [
     ("new",[(methodPost,newGameh)]),
-    ("wait",[(methodGet,waitPage)])
+    ("wait",[(methodGet,waitPage)]),
+    ("checkrequest", [(methodGet, checkRequest)]),
+    ("startgame", [(methodGet, startGamePage)]),
+    ("startgamepost", [(methodPost, startGameh)])
     ]
 
 --[([Char],GameHandler g)]
@@ -80,7 +83,7 @@ pageApp' getPage = do --HandlerM
     join $ lookup (requestMethod req) methodHandlers ? allow (map fst methodHandlers)
 
 staticFile :: String -> Response
-staticFile path = responseFile status200 [] path Nothing
+staticFile path = responseFile ok200 [] path Nothing
 
 pageNotFound :: Response --Note: warp overwrites status code
 pageNotFound = responseFile notFound404 [("Content-Type","text/html")]

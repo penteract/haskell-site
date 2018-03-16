@@ -14,7 +14,7 @@ import qualified Control.Concurrent.Map as Map
 
 
 --Generalised game, a wrapper around different game types
-data GGame = OXG OX MetaData  -- | EnsquaredG MetaData Ensquared
+--data GGame = OXG OX MetaData  -- | EnsquaredG MetaData Ensquared
 
 type GameStore g = Map.Map GameID (MVar (g,MetaData))
 

@@ -5,6 +5,10 @@ import Control.Monad.Except hiding (unless)
 import qualified Data.Map.Lazy as LMap
 --import qualified Data.Map.Strict as SMap LMap.Map == SMap.Map, preventing typeclass fun
 
+import Data.Aeson(ToJSON(..),Value,object)
+import Data.Aeson.Types(Pair)
+import Data.Text(pack)
+
 type Lookup k a = k -> Maybe a
 
 -- helper function for making strings nicely
@@ -57,3 +61,7 @@ fromBoth a =
 
 lookIn :: Eq a => [(a,b)] -> a -> Maybe b
 lookIn = flip lookup
+
+
+(.:) :: ToJSON b => String->b->Pair
+a .: b = (pack a,toJSON b)
