@@ -26,7 +26,7 @@ figure out websockets
 {% if chtoken is defined %}
 <script type="text/javascript" src="/_ah/channel/jsapi"></script>
 <script type="text/javascript" src="/staticfiles/channel.js"></script>
-<script>$(function(){setup("<<chtoken>>")});</script>
+<script>$(function(){setup("< <chtoken> >")});</script>
 {%endif%}-->
 </head>
 
@@ -34,7 +34,6 @@ figure out websockets
 <div id="top" ><<top>></div>
 
 <div id="main">
-<<debug>>
 <<main>>
 </div>
 
@@ -53,7 +52,7 @@ figure out websockets
         <a href="<<href>>" class="link"><<text>></a><br>
 >>
     </div>
-    <<moreside>>
+    <!--< <moreside> >-->
 </div>
 
 

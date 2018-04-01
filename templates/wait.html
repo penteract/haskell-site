@@ -7,7 +7,7 @@
 <p>Give this URL to your opponent. When they visit that page, you will both be sent to pages where you can play each other</p>
 <<url>><br>
 {%else%}
-Please wait for your opponent to respond. 
+Please wait for your opponent to respond.
 {%endif%}
  If they take longer than 2 minutes, the game will be cancelled
 >>
@@ -43,4 +43,5 @@ function poller(){
 setInterval(poller,5000);
 </script>
 >>
+<<SET styles=>>
 <<LOAD base.html>>

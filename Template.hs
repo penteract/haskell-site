@@ -1,5 +1,6 @@
 module Template(procDir,Value(..),Variable,
-    Template,Templates,runM,EvalConfig(..),eval,loadTemplates) where
+    Template,Templates,Environment,runM,EvalConfig(..),eval,
+    loadTemplates, getTemplate) where
 
 
 --import System.Environment
@@ -8,7 +9,7 @@ import System.FilePath
 import Data.Char
 import Data.List
 import Data.Maybe(fromMaybe)
-import Tools--(unless,(?+),(??),(%))
+import Utils--(unless,(?+),(??),(%))
 
 import qualified Control.Monad as CM
 import Control.Monad.State hiding (unless)
@@ -130,7 +131,8 @@ lookupType typ x lookup =
     fromMaybe (Left ("{} '{}' not found"%typ%x)) (Right <$> lookup x)
 
 getVal :: Variable -> Environment -> Either String Value
-getVal v env = fromMaybe (Left ("Variable '{}' not found"%v)) (Right <$> Map.lookup v env)
+--getVal v env = fromMaybe (Left ("Variable '{}' not found"%v)) (Right <$> Map.lookup v env)
+getVal v env = lookupType "Variable" v (flip Map.lookup env)
 
 setV :: Variable -> Value -> M ()
 setV var val = modify (Map.insert var val)
@@ -147,10 +149,12 @@ data EvalConfig = EvalConfig{
     isPrep :: Bool
     }
 
+
 type M = RWST EvalConfig String Environment (Either String)
 
 runM :: M a -> EvalConfig -> Environment -> Either String String
 runM m c env = snd <$> evalRWST m c env
+
 
 --A rearrangement of the arguments of runM
 --runIn :: [(FilePath,Template)] -> Environment -> M a -> Either String (a,String)
@@ -174,8 +178,8 @@ withVal var name f = do
 
 evalT :: Tag -> M ()
 evalT Template =  return ()
---evalT tag@(Print x) = withVal x (show tag) ((tell=<<).lift.printV)
-evalT tag@(Print x) = fromMaybe (Str "") <$> (gets (Map.lookup x)) >>= ((tell=<<).lift.printV)
+evalT tag@(Print x) = withVal x (show tag) ((tell=<<).lift.printV)
+--evalT tag@(Print x) = fromMaybe (Str "") <$> (gets (Map.lookup x)) >>= ((tell=<<).lift.printV)
 --     env <- get
 --     isp <- asks isPrep
 --     either (if isp then const $ tell $ show $ Print x else lift . Left . id) ((tell=<<).lift.printV) (getVal x env)
@@ -186,12 +190,12 @@ evalT (Load fname) = asks files >>= (lift . getTemplate fname) >>= eval
 evalT (Set x t) = do
     val <- censor (const "") $ fmap snd . listen $ eval t
     setV x (Str val)
-evalT tag@(For xName yName t) = do
+evalT tag@(For xName yName t) = withVal yName (show tag) (\y -> do
     y <- fromMaybe (Lst []) <$> (gets (Map.lookup yName))
     yl <- (case y of
         Lst l -> return l
         _ -> throwError ("trying to iterate over {} which is not a list"%yName))
-    evalFor yName t [xName] [Lst [x] | x <- yl]
+    evalFor yName t [xName] [Lst [x] | x <- yl])
 evalT tag@(Fors vars yName t) = do
     y <- fromMaybe (Lst []) <$> (gets (Map.lookup yName))
     yl <- (case y of

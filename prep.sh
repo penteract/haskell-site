@@ -1,4 +1,4 @@
 #!/bin/sh
 set -e
-ghc Prep
-./Prep templates html
+stack build
+stack exec Prep templates html

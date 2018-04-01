@@ -1,4 +1,4 @@
-module Tools where
+module Utils where
 
 import qualified Control.Monad as CM
 import Control.Monad.Except hiding (unless)
@@ -65,3 +65,7 @@ lookIn = flip lookup
 
 (.:) :: ToJSON b => String->b->Pair
 a .: b = (pack a,toJSON b)
+
+
+(.:.) ::  String->String->Pair
+a .:. b = (pack a,toJSON b)

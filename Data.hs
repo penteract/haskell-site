@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Data(PlayerID, GameID, MetaData(..), newMD,
     GameStore(..), GameStoreList(..), Game.Game(..),
     Status(..),Player(..),
@@ -11,6 +12,7 @@ import Game hiding (makeMove,getData,newGame)
 import Data.Aeson(Value)
 import Control.Concurrent.MVar
 import qualified Control.Concurrent.Map as Map
+import qualified Data.ByteString.Char8 as C
 
 
 --Generalised game, a wrapper around different game types
@@ -23,8 +25,9 @@ data GameStoreList = GSL {
 }
 
 data GameInfo = GameInfo{
-    tag :: String,
-    name :: String
+    tag   :: String,
+    name  :: String,
+    views :: [(C.ByteString,C.ByteString)]
     --makeMove :: String -> GGame -> Either String GGame,
     --getData :: GGame -> Value,
     --newGame :: PlayerID -> PlayerID -> GameID -> GGame
@@ -46,7 +49,9 @@ typeclass Game g => KnownGame g where
 
 ox = GameInfo{
     tag     = "ox3",
-    name    = "3D Noughts and Crosses"{-,
+    name    = "3D Noughts and Crosses",
+    views   = map (\x -> (x,x `C.append` ".html")) ["table","perspective"]
+    {-,
     makeMove = \pos (OXG game md) -> --unsafe pattern match
         (\(g,s) -> OXG g (md{status=s}) ) <$> Game.makeMove pos game (status md),
     getData  = (\ (OXG game _) -> Game.getData game),

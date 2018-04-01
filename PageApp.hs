@@ -3,11 +3,12 @@ module PageApp where
 
 import Data(GameStoreList(..),GameStore,Game,ox)
 import Template
-import Tools
+import Utils
 import Pages
 
 import Data.List
 import Data.Char(toLower)
+import Data.Maybe(fromMaybe)
 import Network.Wai
 --Network.HTTP.Types does not currently export status308
 import Network.HTTP.Types.Status
@@ -25,10 +26,12 @@ import System.Random
 
 type Page = [(Method,Handler)]
 
+rdrs = [("/favicon.ico","/staticfiles/favicon.ico"),("/3sphere","/staticfiles/3-sphere.html")]
+
 --cannonise :: String -> String
 cannonise = C.map toLower
 
---pageList :: C.ByteString -> Maybe Page
+pageList :: [(C.ByteString, [(Method,Handler)])]
 pageList =  ([("/",[(methodGet,homePage)])] ++
     concat [procPages getOXStore "ox3" ])
 
@@ -51,7 +54,8 @@ perGamePages = [
     ("wait",[(methodGet,waitPage)]),
     ("checkrequest", [(methodGet, checkRequest)]),
     ("startgame", [(methodGet, startGamePage)]),
-    ("startgamepost", [(methodPost, startGameh)])
+    ("startgamepost", [(methodPost, startGameh)]),
+    ("play", [(methodGet,playPage)])
     ]
 
 --[([Char],GameHandler g)]
@@ -72,22 +76,19 @@ pageApp' getPage = do --HandlerM
     --lift$lift$lift (putStrLn$unlines (map (C.unpack.fst) pageList))
     req <- request
     let path = rawPathInfo req
-        spath = C.unpack path
         cannonicalPath = cannonise path
+        spath = fromMaybe (C.unpack path) (lookup path rdrs)
         method = requestMethod req
-  --either (return.return) (id) $ do --Either Resp monad
     path == cannonicalPath ?? redirect cannonicalPath
-    not ("/staticfiles" `isPrefixOf` spath && method==methodGet) ??
-        staticFile (tail spath)
+    not ("/staticfiles" `isPrefixOf` spath) ??
+        case method of "GET" -> staticFile (tail spath)
+                       _     -> allow [methodGet]
     methodHandlers <- getPage path ? pageNotFound
     join $ lookup (requestMethod req) methodHandlers ? allow (map fst methodHandlers)
 
 staticFile :: String -> Response
 staticFile path = responseFile ok200 [] path Nothing
 
-pageNotFound :: Response --Note: warp overwrites status code
-pageNotFound = responseFile notFound404 [("Content-Type","text/html")]
-    ("staticfiles" </> "404.html") Nothing
 
 redirect :: C.ByteString -> Response
 redirect url = responseLBS permanentRedirect308 [(hLocation,url)] ""

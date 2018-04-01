@@ -10,7 +10,7 @@ import Network.WebSockets(Connection)
 import Data.ByteString(ByteString,unpack)
 import Data.Int
 import System.Posix.Time
-import Tools
+import Utils
 
 class Game g where
     --makeMove assumes the move is made by the player whose turn it is
@@ -32,8 +32,8 @@ data MetaData = MD {
     lastMove :: Int,
     status :: Status}--OK, turn isn't really metadata
 
-newMD :: PlayerID -> PlayerID -> GameID -> IO MetaData
-newMD pl0 pl1 gid = do
+newMD :: PlayerID -> PlayerID -> Player -> GameID -> IO MetaData
+newMD pl0 pl1 p gid = do
     t <- fromEnum <$> epochTime --systemSeconds<$>getSystemTime
     return MD{
         player0   = pl0,
@@ -41,7 +41,7 @@ newMD pl0 pl1 gid = do
         listeners = [],
         gid       = gid,
         lastMove  = t,
-        status    = Unstarted}
+        status    = Unstarted p}
 
 instance ToJSON ByteString where
     toJSON b = toJSON $ unpack b
@@ -66,8 +66,8 @@ other :: Player -> Player
 other One = Zero
 other Zero = One
 
-
-data Status = Unstarted | IsTurn Player | Won Player | Draw | Timeout Player
+-- Waiting for p to join; Is the turn of p; p has won; result is a draw; p lost due to timeout
+data Status = Unstarted Player | IsTurn Player | Won Player | Draw | Timeout Player
   deriving (Eq,Show)
 
 gameover :: Status -> Bool
@@ -85,7 +85,7 @@ instance Enum Status where
     fromEnum (Won p) = sTARTED+gAMEOVER+tURN*(fromEnum p)
     fromEnum (IsTurn p) = sTARTED+tURN*(fromEnum p)
     fromEnum (Timeout p) = sTARTED + tIMEUP + gAMEOVER + tURN*(fromEnum p)
-    fromEnum Unstarted = 0
+    fromEnum (Unstarted p) = tURN*(fromEnum p)
     fromEnum Draw = sTARTED + gAMEOVER + dRAW
 
 sTARTED=4
@@ -95,7 +95,9 @@ dRAW=16
 tURN=1
 tIMEUP=32
 
-gameURL :: MetaData -> String -> Int -> String--should this be in Data?
-gameURL (MD{gid=n,player0=pl0,player1=pl1}) gname pl = "/{}/play?gameID={}"%gname%show n ++ if pl>1 || pl<0 then "" else "&playerID={}"%show ([pl0,pl1]!!pl)
+gameURL :: MetaData -> String -> Maybe Player -> String--should this be in Data?
+gameURL (MD{gid=n,player0=pl0,player1=pl1}) gname pl = "/{}/play?gameID={}"%gname%show n ++ case pl of
+    Just p -> "&playerID={}"%show ([pl0,pl1]!!fromEnum p)
+    Nothing -> ""
 
 --instance Game g => Game (StoredGame g) where

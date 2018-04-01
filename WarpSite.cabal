@@ -19,7 +19,7 @@ cabal-version:       >=1.10
 executable App
   main-is:             App.hs
   other-modules:       WSApp, PageApp, Pages,
-    Data, Game, OX, Tools, Template
+    Data, Game, OX, Utils, Template
   other-extensions:    OverloadedStrings
   build-depends:       base,
     wai, http-types, warp, wai-websockets, websockets, aeson,
@@ -30,11 +30,11 @@ executable App
   -- hs-source-dirs:
   default-language:    Haskell2010
 
--- executable Prep
---   main-is:             Prep.hs
---   other-modules:       Template
---   other-extensions:    OverloadedStrings, GADTs, FlexibleInstances
---   build-depends:       base, wai, http-types, warp, wai-websockets, ctrie, array,
---     directory, filepath, mtl, containers, websockets, text, bytestring
---   -- hs-source-dirs:
---   default-language:    Haskell2010
+executable Prep
+  main-is:             Prep.hs
+  other-modules:       Template, Data, Utils
+  other-extensions:    OverloadedStrings, GADTs, FlexibleInstances
+  build-depends:       base, wai, http-types, warp, wai-websockets, array,
+    directory, filepath, mtl, containers, websockets, text, bytestring, aeson, unix, ctrie
+  -- hs-source-dirs:
+  default-language:    Haskell2010

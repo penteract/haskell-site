@@ -1,7 +1,7 @@
 module OX where
 
 import Game
-import Tools
+import Utils
 
 import Data.Array
 import Data.Char(ord)

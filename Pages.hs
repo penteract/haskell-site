@@ -3,15 +3,18 @@ module Pages(Handler,GameHandler,
     request,gameStore,
     homePage,newGameh,
     waitPage,checkRequest,
-    startGamePage, startGameh) where
+    startGamePage, startGameh,
+    playPage,
+    pageNotFound) where
 
 import Network.Wai
 import Template
-import Tools
+import Utils
 import Data
 import Game(gameURL)--should this be in Data?
 
 import Network.HTTP.Types
+import System.Random
 import Control.Concurrent.MVar
 import qualified Control.Concurrent.Map as CMap
 import Control.Monad.Reader hiding (unless)
@@ -22,8 +25,10 @@ import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.Map as Map
 import Data.Tuple(swap)
 import Data.Char
-import System.Random
 import Data.Map(fromList)
+import Data.Maybe(fromMaybe)
+import System.FilePath((</>))
+import Data.List(elemIndex)
 
 import qualified Data.Aeson as A --(ToJSON(..),object,Value)
 
@@ -38,6 +43,9 @@ type Handler = HandlerM (Templates -> Response)
 
 type GameHandler g = GameInfo -> GameStore g -> HandlerM (Templates -> Response)
 
+returnPage :: Response -> HandlerM a
+returnPage = throwError
+
 request :: HandlerM Request
 request = fst<$>ask
 askQuery :: HandlerM Query
@@ -45,12 +53,17 @@ askQuery = queryString <$>  request
 
 getParam :: C.ByteString -> HandlerM (Maybe C.ByteString)
 getParam p = (join . lookup p) <$> askQuery
-
 getParam' :: C.ByteString -> HandlerM C.ByteString
 getParam' s = getParam s >>= (? badRequest)
 
+
 gameStore :: HandlerM GameStoreList
 gameStore = snd<$>ask
+
+getGame :: Game g => GameID -> GameStore g -> HandlerM (Maybe (MVar (g,MetaData)))
+getGame gmNum store = (liftIO$ CMap.lookup gmNum store)
+getGame' :: Game g => GameID -> GameStore g -> Response -> HandlerM (MVar (g,MetaData))
+getGame' gmNum store resp = (liftIO$ CMap.lookup gmNum store) >>= (? resp)
 
 --getCurrentPlayer :: HM (Maybe C.ByteString)
 --getCurrentPlayer = (join . lookup "player") <$> askQuery
@@ -65,33 +78,36 @@ randomInt = do
     return result
 
 randomChar :: HandlerM Char
-randomChar = ((['a'..'z']++['A'..'Z']++['0'..'9']++['/','+'])!!)
+randomChar = ((['a'..'z']++['A'..'Z']++['0'..'9']++['-','_'])!!)
     <$> (`mod`64) <$> randomInt --26+26+10+2=64
     --(chr.(+65).(`mod` 64)) <$> randomInt
 
 randomString :: HandlerM C.ByteString
 randomString = C.pack <$> mapM (const randomChar) [1..20]
 
-debug :: String -> Response
-debug = responseLBS internalServerError500 [("Content-Type","text/plain")]
-    . CL.pack
-
-badRequest :: Response --Note: warp overwrites status code (although not here because it's not a file?)
+badRequest :: Response
 badRequest = responseLBS badRequest400 [] "400 Bad request"
 
-loadWith :: FilePath -> [(Variable,Value)] -> Templates -> Response
-loadWith path env ts = fromBoth $ do
-    temp <- ts path ? debug ("template {} not found"%path)
-    case runM (eval temp) (EvalConfig ts False) (Map.fromList env) of
-        Left err -> Left $ debug err
-        Right body -> return $
-            responseLBS ok200 [(hContentType,"text/html")] (CL.pack body)
+debug :: String -> Response
+debug = serverError -- responseLBS internalServerError500 [(hContentType,"text/plain")]. CL.pack
 
+loadWith :: FilePath -> [(Variable,Value)] -> Templates -> Response
+loadWith path env ts =
+    case getTemplate path ts >>= (\temp -> runM (eval temp) (EvalConfig ts False) (Map.fromList env)) of
+        Left err ->  debug err
+        Right body -> responseLBS ok200 [(hContentType,"text/html")] (CL.pack body)
+
+
+{-loadTemplate :: String -> Environment -> Templates -> Response
+loadTemplate name env ts = case getTemplate name ts >>= (flip (flip (runM .eval) (EvalConfig ts False)) env) of
+    Left err -> serverError err
+    Right body -> responseLBS ok200 [("Content-Type","text/html")] (CL.pack body)-}
 
 homePage :: Handler
 homePage = return $ "games.html" `loadWith` [
     ("gameList", Lst [Lst [Str tag, Str name, Lst []] | GameInfo{tag=tag,name=name} <- games]),
-    ("path",Lst [Lst[Str "/" ,Str "home"]])]
+    ("path",Lst []),
+    ("lastpath",Str "home")]
 
 newGameh :: Game g => GameHandler g
 newGameh info store = do
@@ -99,9 +115,9 @@ newGameh info store = do
     opp <- getParam "opp" >>= (? badRequest)
     gid <- randomString
     turn <- getParam "turn"
-    let (pl0, pl1) =
-            (if turn /= Just "false" then id else swap) (playerID,opp)
-    md <- liftIO $ newMD pl0 pl1 gid
+    let p = toEnum$fromEnum$ turn == Just "false"
+    let (pl0, pl1) = (if p == Zero then id else swap) (playerID,opp)
+    md <- liftIO $ newMD pl0 pl1 p gid
 
     (gameState,rdUrl) <- case C.unpack opp of
         "y" -> do
@@ -135,35 +151,127 @@ getThings = mapM (\s -> do
     val <- getParam s >>= (? badRequest)
     return (C.unpack s, Str $ C.unpack val) ) -- This will probably change to use bytestrings
 
+--readGameInfo :: Game g => GameStore g -> C.ByteString -> HandlerM g
+--readGameInfo store gmNum = do
+    --gmMVar <- (liftIO$ CMap.lookup gmNum store) >>= (? pageNotFound)
+    --readMVar
+
+
 waitPage :: Game g => GameHandler g
 waitPage info store = do
-    loadWith "wait.html" <$> getThings ["playerID", "gameID"]
+    gmNum <- getParam' "gameID"
+    gm <- (liftIO$ CMap.lookup gmNum store) >>= (? pageNotFound)
+    (game, md@MD{status=s,player0=pl0,player1=pl1}) <- liftIO$ readMVar gm
+    plID <- getParam' "playerID" -- >>= return. (maybe)
+    pl <- if pl0==plID then return Zero else ((pl1==plID??badRequest)>> return One)
+    things <- getThings ["playerID", "gameID"]
+    case s of
+        Unstarted p  -> do
+            p == pl??badRequest
+            --check time
+            host <- reader (requestHeaderHost.fst) >>= (? badRequest)
+            return$ loadWith "wait.html" (things ++ [("game",Str$ name info),("url",Str$ C.unpack host++"/join?gameID="++ C.unpack gmNum)])
+            --returnJSON [("request".:."wait")]
+        _          -> do
+            --liftIO$ putStrLn$ "waiting for a finished game"
+            returnPage$ responseLBS temporaryRedirect307 [(hLocation, C.concat ["/play?gameID=",gmNum,"&playerID=",plID])] ""
 
 checkRequest :: Game g => GameHandler g
 checkRequest info store = do
     gmNum <- getParam' "gameID"
     gm <- (liftIO$ CMap.lookup gmNum store) >>= (? responseLBS ok200 [] "no") --no game found? --could be 404, 422
-    (game, md@MD{status=s,player0=p0}) <- liftIO$ readMVar gm
+    (game, md@MD{status=s,player0=pl0,player1=pl1}) <- liftIO$ readMVar gm
+    plID <- getParam' "playerID" -- >>= return. (maybe)
+    pl <- if pl0==plID then return Zero else ((pl1==plID??badRequest)>> return One)
 
-    let msg = [("gameID".: gmNum)]
+    let msg = [("gameID".: C.unpack gmNum)]
+    let returnJSON dat = returnPage (jsonResp$A.object$ (msg++dat))
     case s of
-        Unstarted  -> do
+        Unstarted p  -> do
             --check time
-            throwError undefined
-        (IsTurn p) -> throwError (jsonResp$A.object$ (msg++[("request".:"goto") , ("target".:gameURL md (tag info))]))
+            returnJSON [("request".:."wait")]
+        (IsTurn p) -> returnJSON [("request".:."goto") , ("target".:.gameURL md (tag info) (Just pl))]
         _          -> do
             liftIO$ putStrLn$ "waiting for a finished game"
-    --d <-(gm ? undefined)
-    return undefined
+            returnPage$ responseLBS ok200 [] "no"
+
 
 startGamePage :: Game g => GameHandler g
-startGamePage info store = undefined
+startGamePage info store = do
+    loadWith "startGame.html" <$> getThings ["gameID"]
 
 startGameh :: Game g => GameHandler g
-startGameh info store = undefined
+startGameh info store = do
+    gmNum <- getParam' "gameID"
+    gmVar <- getGame' gmNum store pageNotFound --perhaps this should be a different error
+    (gm,md@MD{player0=pl0,player1=pl1}) <- liftIO (takeMVar gmVar)
+    case status md of
+        Unstarted p -> do
+            liftIO (putMVar gmVar (gm,md{status=IsTurn Zero}))
+            --let pl = if p==Zero then pl0 else pl1
+            returnPage (responseLBS ok200  [("Content-Type","text/plain")] (CL.pack (gameURL md (tag info) (Just p))))
+        _ -> liftIO (putMVar gmVar (gm,md)) >> returnPage (responseLBS ok200 [("Content-Type","text/plain")] "/")
+    --return undefined
+
+playPage :: Game g => GameHandler g
+playPage info store = do
+    gmNum <- getParam' "gameID"
+    plID <- getParam' "playerID" --could change later to allow observers
+    gmVar <- getGame' gmNum store pageNotFound
+    (gm,md@MD{player0=pl0, player1=pl1}) <- liftIO (takeMVar gmVar)
+    pln <- elemIndex plID [pl0,pl1] ? forbidden
+    v <- getParam "view"
+    let vs = views info
+    let view = fromMaybe (snd$ head vs) (v >>= lookIn vs)
+    let tpath = tag info </> C.unpack view
+    let values = [("player", Str "You"),("playerID",Str$ C.unpack plID)]
+    return$ tpath `loadWith` values
+
+pageNotFound :: Response --Note: warp overwrites status code (hence not using file)
+pageNotFound = responseLBS notFound404 [(hContentType,"text/html")]
+    (CL.unlines ["<html>",
+    " <head>",
+    "  <title>404 Not Found</title>",
+    " </head>",
+    " <body>",
+    "  <h1>404 Not Found</h1>",
+    "  The resource could not be found.<br /><br />",
+    "",
+    "",
+    "",
+    " </body>",
+    " </html>"])
+
+forbidden :: Response --Note: warp overwrites status code (hence not using file)
+forbidden = responseLBS forbidden403 [(hContentType,"text/html")]
+    (CL.unlines ["<html>",
+    " <head>",
+    "  <title>403 Forbidden</title>",
+    " </head>",
+    " <body>",
+    "  <h1>403 Forbidden</h1>",
+    "  You do not have permission to access this resource<br /><br />",
+    " </body>",
+    " </html>"])
+
+
+serverError :: String -> Response
+serverError err = responseLBS (Status 500 (C.pack err)) [(hContentType,"text/html")]
+        (CL.unlines ["<html>",
+        " <head>",
+        "  <title>500 Internal Server Error</title>",
+        " </head>",
+        " <body>",
+        "  <h1>500 Internal Server Error</h1>",
+        "  Something went wrong and it's my fault<br /><br />",
+        CL.pack err,
+        "",
+        "",
+        " </body>",
+        " </html>"])
 
 jsonResp :: A.Value -> Response
-jsonResp = responseLBS ok200 [("Content-Type","text/html")] . A.encode
+jsonResp = responseLBS ok200 [(hContentType,"application/json")] . A.encode
 
 --encodeToTextBuilder :: A.Value -> Builder
 --encodeToTextBuilder = A.encodeToTextBuilder

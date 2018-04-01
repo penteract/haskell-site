@@ -7,7 +7,7 @@ import System.Environment
 --import Data.Maybe(fromMaybe)
 
 import Template
---import Data
+import Data
 
 --type FileContents = String
 
@@ -23,4 +23,5 @@ import Template
 main :: IO ()
 main = do
    [inDir,outDir] <- getArgs
-   procDir [("four",Lst $ map (Str .show) [0..3])] inDir outDir
+   procDir [("four",Lst $ map (Str .show) [0..3]),
+       ("gameList", Lst [Lst [Str tag, Str name, Lst []] | GameInfo{tag=tag,name=name} <- games])] inDir outDir

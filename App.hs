@@ -11,7 +11,7 @@ import PageApp(pageApp)
 import WSApp(wsApp)
 import Data (GameStoreList(GSL))
 import Template (Templates,loadTemplates)
-import Tools(lookIn)
+import Utils(lookIn)
 
 import qualified Control.Concurrent.Map as Map
 
@@ -44,7 +44,7 @@ main :: IO ()
 main = do
     m <- GSL <$> Map.empty
     putStrLn $ "http://localhost:"++show port ++"/"
-    ts' <- ((lookIn$) <$>) <$> loadTemplates "templates"
+    ts' <- ((lookIn$) <$>) <$> loadTemplates "html"
     case ts' of
         Right ts -> runSettings settings $ appmm $ app ts m
         Left e -> putStrLn e
