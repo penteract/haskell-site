@@ -1,13 +1,14 @@
 module Game(Player(..),other,Game(..),MetaData(..),Status(..),newMD,
     PlayerID,GameID,gameURL) where
 
-import Data.Aeson(ToJSON(..),Value,object)
+--import Data.Aeson(ToJSON(..),Value,object)
+import Text.JSON
 import Data.Text(pack)
-import Data.Aeson.Types(Pair)
+--import Data.Aeson.Types(Pair)
 import Data.Bits((.&.))
 --import Control.Monad.State
 import Network.WebSockets(Connection)
-import Data.ByteString(ByteString,unpack)
+import Data.ByteString.Char8(ByteString,unpack)
 import Data.Int
 import System.Posix.Time
 import Utils
@@ -15,21 +16,24 @@ import Utils
 class Game g where
     --makeMove assumes the move is made by the player whose turn it is
     makeMove :: String -> g -> Status -> Either String (g,Status)
-    getData :: g -> Value
+    getData :: g -> JSValue
     newGame :: g
     ais :: String -> Maybe (g -> Either String g)
 
+--in progress
+--move :: Game g => String -> (g,MetaData) -> (g,MetaData)
+--move pos (game,dat) = (\(g,s) -> OXG g (md{status=s}) ) <$> makeMove pos game (status md)
 
 type PlayerID = ByteString
 type GameID = ByteString
 
 
-data MetaData = MD {
+data MetaData = MD { --data common to all game types
     player0 :: PlayerID,
     player1 :: PlayerID,
     listeners :: [Connection],
     gid :: GameID,
-    lastMove :: Int,
+    lastMove :: Int,--time of last move played
     status :: Status}--OK, turn isn't really metadata
 
 newMD :: PlayerID -> PlayerID -> Player -> GameID -> IO MetaData
@@ -43,8 +47,8 @@ newMD pl0 pl1 p gid = do
         lastMove  = t,
         status    = Unstarted p}
 
-instance ToJSON ByteString where
-    toJSON b = toJSON $ unpack b
+--instance ToJSON ByteString where
+--    toJSON b = toJSON $ unpack b
 
 --(.:) :: ToJSON b => String->b->Pair
 --a .: b = (pack a,toJSON b)
@@ -53,8 +57,8 @@ instance ToJSON ByteString where
 --(.::) :: ToJSON b => String->b->Pair
 --a .:: b = (pack a,toJSON $ unpack b)
 
-updateMsg :: Game g => g -> MetaData -> Value
-updateMsg gg dat  = object
+updateMsg :: Game g => g -> MetaData -> JSObject JSValue
+updateMsg gg dat  = toJSObject
     ["request" .: "update",
      "data" .: (getData  gg),
      "gameID" .: gid dat,
@@ -96,8 +100,8 @@ tURN=1
 tIMEUP=32
 
 gameURL :: MetaData -> String -> Maybe Player -> String--should this be in Data?
-gameURL (MD{gid=n,player0=pl0,player1=pl1}) gname pl = "/{}/play?gameID={}"%gname%show n ++ case pl of
-    Just p -> "&playerID={}"%show ([pl0,pl1]!!fromEnum p)
+gameURL (MD{gid=n,player0=pl0,player1=pl1}) gname pl = "/{}/play?gameID={}"%gname%unpack n ++ case pl of
+    Just p -> "&playerID={}"%unpack ([pl0,pl1]!!fromEnum p)
     Nothing -> ""
 
 --instance Game g => Game (StoredGame g) where

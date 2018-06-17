@@ -7,23 +7,27 @@ body {background-color:#FFFFFF;
 	font-size:20pt;
 	font-family:"Bell MT",serif;
 	padding:0.5em;}
-	
+
 
 #main {min-width:20em;
 	padding:1em 1.5em;}
 
+.viewingplayer{
+    font-style:italic;
+}
+
 .side{min-width:10em;
 	text-align:right;
 	clear:both;}
-	
-.b{background:yellow;
+
+.choosegame{background:yellow;
 	border:5px solid white;
 	border-radius:10px;
     padding: 10px;}
-	
-.b a{text-decoration: none;}
-.b a:hover{text-decoration: underline;}
-.b ul{list-style-type: none}
+
+.choosegame a{text-decoration: none;}
+.choosegame a:hover{text-decoration: underline;}
+.choosegame ul{list-style-type: none}
 
 @media (min-width:35em){
 #main {float:left;

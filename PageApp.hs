@@ -53,9 +53,10 @@ perGamePages = [
     ("new",[(methodPost,newGameh)]),
     ("wait",[(methodGet,waitPage)]),
     ("checkrequest", [(methodGet, checkRequest)]),
-    ("startgame", [(methodGet, startGamePage)]),
+    ("join", [(methodGet, startGamePage)]),
     ("startgamepost", [(methodPost, startGameh)]),
-    ("play", [(methodGet,playPage)])
+    ("play", [(methodGet,playPage)]),
+    ("makemove", [(methodPost, makeMoveh)])
     ]
 
 --[([Char],GameHandler g)]

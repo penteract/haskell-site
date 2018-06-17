@@ -22,7 +22,7 @@ executable App
     Data, Game, OX, Utils, Template
   other-extensions:    OverloadedStrings
   build-depends:       base,
-    wai, http-types, warp, wai-websockets, websockets, aeson,
+    wai, http-types, warp, wai-websockets, websockets, json,
     ctrie, array, containers, text, bytestring, random,
     directory, filepath, mtl,
     unix
@@ -32,9 +32,9 @@ executable App
 
 executable Prep
   main-is:             Prep.hs
-  other-modules:       Template, Data, Utils
+  other-modules:       Template, Data, Utils,Game,OX
   other-extensions:    OverloadedStrings, GADTs, FlexibleInstances
   build-depends:       base, wai, http-types, warp, wai-websockets, array,
-    directory, filepath, mtl, containers, websockets, text, bytestring, aeson, unix, ctrie
+    directory, filepath, mtl, containers, websockets, text, bytestring, json, unix, ctrie
   -- hs-source-dirs:
   default-language:    Haskell2010

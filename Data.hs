@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-Stores data for individual games. This should be the only file which must be modified to add a new game-}
 module Data(PlayerID, GameID, MetaData(..), newMD,
     GameStore(..), GameStoreList(..), Game.Game(..),
     Status(..),Player(..),
@@ -9,7 +10,8 @@ import OX
 import qualified Game
 import Game hiding (makeMove,getData,newGame)
 
-import Data.Aeson(Value)
+--import Data.Aeson(Value)
+import Text.JSON
 import Control.Concurrent.MVar
 import qualified Control.Concurrent.Map as Map
 import qualified Data.ByteString.Char8 as C

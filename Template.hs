@@ -91,14 +91,17 @@ allFiles p = do
 type Template = [(String,Tag)]
 
 type Variable = String
-data Tag = Template | Print Variable | Load FilePath | Set Variable Template
-    | Fors [Variable] Variable Template | For Variable Variable Template | End deriving Eq
+data Tag = Template | Print Variable | Load FilePath
+    | Set Variable Template | Default Variable Template
+    | Fors [Variable] Variable Template | For Variable Variable Template | End
+    deriving Eq
 
 instance Show Tag where
   show Template = "<<TEMPLATE>>"
   show (Print x) = "<<{}>>"%x
   show (Load fname) = "<<LOAD {}>>"%fname
   show (Set x t) = "<<SET {}= {}>>"%x%showT t
+  show (Default x t) = "<<DEFAULT {}= {}>>"%x%showT t
   show (For x y t) = "<<FOR {} IN {}: {}>>"%x%y%showT t
   show (Fors xs y t) = "<<FOR {} IN {}: {}>>"%(intercalate ", " xs)%y%showT t
   show End = ""
@@ -190,6 +193,13 @@ evalT (Load fname) = asks files >>= (lift . getTemplate fname) >>= eval
 evalT (Set x t) = do
     val <- censor (const "") $ fmap snd . listen $ eval t
     setV x (Str val)
+evalT (Default x t) = do
+    oldV <- gets (Map.lookup x)
+    case oldV of
+        Nothing -> do
+            val <- censor (const "") $ fmap snd . listen $ eval t
+            setV x (Str val)
+        Just _  -> return ()
 evalT tag@(For xName yName t) = withVal yName (show tag) (\y -> do
     y <- fromMaybe (Lst []) <$> (gets (Map.lookup yName))
     yl <- (case y of
@@ -252,7 +262,8 @@ parseTag = do
      tok <- getMatch (all isAlphaNum)
      case tok of
           "TEMPLATE" ->return Template
-          "SET" -> parseSet
+          "SET" -> uncurry Set <$> parseAssign
+          "DEFAULT" -> uncurry Default <$> parseAssign
           "FOR" -> parseFor
           "LOAD" -> parseLoad
           "" ->  get >>= throwError.take 20
@@ -265,12 +276,12 @@ parseLoad = do
     fname <- getMatch $ all ((||).(=='.') <*> isAlphaNum)
     return $ Load fname
 
-parseSet :: Parser Tag
-parseSet = do
+parseAssign :: Parser (Variable,Template)
+parseAssign = do
     vname <- getVar
     getStr "="
     tmp <- parse
-    return $ Set vname tmp
+    return $ (vname,tmp)
 
 parseFor :: Parser Tag
 parseFor = do

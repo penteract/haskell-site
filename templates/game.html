@@ -4,6 +4,9 @@
   <div id="game">
 <<game>>
   </div>
+  <script>
+  $("#<<playern>>").addClass("viewingplayer")
+  </script>
 >>
 
 <<SET moreside=
@@ -20,7 +23,9 @@
 
 <script>
 var gameID='<<gameID>>';
-
+var playerID='<<playerID>>'
+setTimeout(poller,t);t+=2000
+/*
 {%if playerID is defined%}
 var playerID='<<playerID>>'
   {%if opponent!="AI"%}
@@ -28,7 +33,7 @@ var playerID='<<playerID>>'
   {%endif%}
 {%else%}
 var playerID=""
-{%endif%}
+{%endif%}*/
 player=<<playern>>//0 or 1
 lastm='<<data>>'
 lastj=JSON.parse(lastm)

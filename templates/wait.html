@@ -26,19 +26,13 @@ function process(m) {//used in channel.js
         location.replace("/");
       }
       else if(m.answer=="yes"){
-        location.replace("play?gameID=<<gameID>>");
+        location.replace("play?gameID=<<gameID>>&playerID=<<playerID>>");
       }
     }
   }
 }
 function poller(){
-    $.get("checkrequest",{gameID:"<<gameID>>",playerID:"<<playerID>>" },
-        function(m){
-            if(m=="no") location.replace("/")
-            else{m=JSON.parse(m)
-                 if(m.request=="goto")location.replace(m.target)
-            }
-    })
+    $.get("checkrequest",{gameID:"<<gameID>>",playerID:"<<playerID>>" },process)
 }
 setInterval(poller,5000);
 </script>

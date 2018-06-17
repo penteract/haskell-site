@@ -30,7 +30,8 @@ import Data.Maybe(fromMaybe)
 import System.FilePath((</>))
 import Data.List(elemIndex)
 
-import qualified Data.Aeson as A --(ToJSON(..),object,Value)
+--import qualified Data.Aeson as A --(ToJSON(..),object,Value)
+import Text.JSON
 
 --type Handler =  Request -> GameStore -> IO (Templates -> Response)
 
@@ -49,13 +50,15 @@ returnPage = throwError
 request :: HandlerM Request
 request = fst<$>ask
 askQuery :: HandlerM Query
-askQuery = queryString <$>  request
+askQuery = queryString <$> request
 
 getParam :: C.ByteString -> HandlerM (Maybe C.ByteString)
 getParam p = (join . lookup p) <$> askQuery
 getParam' :: C.ByteString -> HandlerM C.ByteString
 getParam' s = getParam s >>= (? badRequest)
 
+getBodyParam :: C.ByteString -> HandlerM C.ByteString
+getBodyParam p = (join . lookup p . parseQuery) <$> (request >>= liftIO.requestBody) >>= (? badRequest)
 
 gameStore :: HandlerM GameStoreList
 gameStore = snd<$>ask
@@ -91,10 +94,12 @@ badRequest = responseLBS badRequest400 [] "400 Bad request"
 debug :: String -> Response
 debug = serverError -- responseLBS internalServerError500 [(hContentType,"text/plain")]. CL.pack
 
+
+--Loads a template specified by a filename with a set of values
 loadWith :: FilePath -> [(Variable,Value)] -> Templates -> Response
 loadWith path env ts =
     case getTemplate path ts >>= (\temp -> runM (eval temp) (EvalConfig ts False) (Map.fromList env)) of
-        Left err ->  debug err
+        Left err ->  debug (err++path)
         Right body -> responseLBS ok200 [(hContentType,"text/html")] (CL.pack body)
 
 
@@ -102,6 +107,15 @@ loadWith path env ts =
 loadTemplate name env ts = case getTemplate name ts >>= (flip (flip (runM .eval) (EvalConfig ts False)) env) of
     Left err -> serverError err
     Right body -> responseLBS ok200 [("Content-Type","text/html")] (CL.pack body)-}
+
+getThings :: [C.ByteString] -> HandlerM [(Variable,Value)]
+getThings = mapM (\s -> do
+    val <- getParam s >>= (? badRequest)
+    return (C.unpack s, Str $ C.unpack val) ) -- This will probably change to use bytestrings
+
+
+--Page Handlers
+----------------------------
 
 homePage :: Handler
 homePage = return $ "games.html" `loadWith` [
@@ -146,11 +160,6 @@ newGameh info store = do
     where
         gid = "gameID"
 
-getThings :: [C.ByteString] -> HandlerM [(Variable,Value)]
-getThings = mapM (\s -> do
-    val <- getParam s >>= (? badRequest)
-    return (C.unpack s, Str $ C.unpack val) ) -- This will probably change to use bytestrings
-
 --readGameInfo :: Game g => GameStore g -> C.ByteString -> HandlerM g
 --readGameInfo store gmNum = do
     --gmMVar <- (liftIO$ CMap.lookup gmNum store) >>= (? pageNotFound)
@@ -170,7 +179,8 @@ waitPage info store = do
             p == pl??badRequest
             --check time
             host <- reader (requestHeaderHost.fst) >>= (? badRequest)
-            return$ loadWith "wait.html" (things ++ [("game",Str$ name info),("url",Str$ C.unpack host++"/join?gameID="++ C.unpack gmNum)])
+            return$ loadWith "wait.html" (things ++ [("game",Str$ name info),("url",Str$ C.unpack host++"/"++tag info++"/join?gameID="++ C.unpack gmNum), ("path",Lst [Lst[Str "/", Str "Home"]]), ("lastpath", Str"Wait")])
+            --return$ loadWith "wait.html" (things ++ [("game",Str$ name info),("url",Str$ C.unpack host++"/join?gameID="++ C.unpack gmNum)])
             --returnJSON [("request".:."wait")]
         _          -> do
             --liftIO$ putStrLn$ "waiting for a finished game"
@@ -185,15 +195,17 @@ checkRequest info store = do
     pl <- if pl0==plID then return Zero else ((pl1==plID??badRequest)>> return One)
 
     let msg = [("gameID".: C.unpack gmNum)]
-    let returnJSON dat = returnPage (jsonResp$A.object$ (msg++dat))
+    let returnJSON dat = returnPage (jsonResp$toJSObject$ (msg++dat))
+    let reply answer = returnJSON [("request".:."reply"), ("answer".:.answer)]
     case s of
         Unstarted p  -> do
             --check time
             returnJSON [("request".:."wait")]
-        (IsTurn p) -> returnJSON [("request".:."goto") , ("target".:.gameURL md (tag info) (Just pl))]
+        (IsTurn p) -> reply "yes" --[("request".:."goto") , ("target".:.gameURL md (tag info) (Just pl))]
         _          -> do
             liftIO$ putStrLn$ "waiting for a finished game"
-            returnPage$ responseLBS ok200 [] "no"
+            reply "no"
+            --returnPage$ responseLBS ok200 [] "no"
 
 
 startGamePage :: Game g => GameHandler g
@@ -202,7 +214,15 @@ startGamePage info store = do
 
 startGameh :: Game g => GameHandler g
 startGameh info store = do
-    gmNum <- getParam' "gameID"
+    {-r <- request >>= liftIO.requestBody
+    gmNum' <- case decodeStrict. C.unpack$ r of
+        Ok (r') -> return (valFromObj "gameID" r')
+        _ -> returnPage$debug (show r) --returnPage badRequest
+    gmNum <- C.pack <$> fromJSString <$> case gmNum' of
+        Ok (JSString s) -> return s
+        _ -> returnPage$ debug (show r)-}
+    --parseQuery
+    gmNum <- getBodyParam "gameID"
     gmVar <- getGame' gmNum store pageNotFound --perhaps this should be a different error
     (gm,md@MD{player0=pl0,player1=pl1}) <- liftIO (takeMVar gmVar)
     case status md of
@@ -217,15 +237,55 @@ playPage :: Game g => GameHandler g
 playPage info store = do
     gmNum <- getParam' "gameID"
     plID <- getParam' "playerID" --could change later to allow observers
+    --liftIO (putStrLn "hi")
     gmVar <- getGame' gmNum store pageNotFound
-    (gm,md@MD{player0=pl0, player1=pl1}) <- liftIO (takeMVar gmVar)
+    (gm,md@MD{player0=pl0, player1=pl1}) <- liftIO (readMVar gmVar)
     pln <- elemIndex plID [pl0,pl1] ? forbidden
     v <- getParam "view"
     let vs = views info
     let view = fromMaybe (snd$ head vs) (v >>= lookIn vs)
     let tpath = tag info </> C.unpack view
-    let values = [("player", Str "You"),("playerID",Str$ C.unpack plID)]
+    let values = [("path",Lst [Lst[Str "/", Str "Home"]]),
+         ("lastpath", Str"Wait"),
+         ("links",Lst[Lst[Str$ "?pageType={}&gameID={}&playerID={}"%C.unpack ptype%C.unpack gmNum%C.unpack plID,
+                          Str$ C.unpack ptype++" view"] | (ptype,file) <- vs,  ptype/=view])
+                            ]++
+           map (\(x,y)->(x,Str y))
+            [{-("player","You"),-} ("playerID", C.unpack plID), ("playern", show pln),
+            ("player"++show pln,"You"),("player"++show(1-pln),"Opponent"),
+            ("gameID", C.unpack gmNum),
+             ("data" , encode (getData gm))]
     return$ tpath `loadWith` values
+
+
+makeMoveh :: Game g => GameHandler g
+makeMoveh info store = do
+    gmNum <- getParam' "gameID"
+    plID <- getParam' "playerID"
+    pos <- getParam "pos"
+    gmVar <- getGame' gmNum store pageNotFound
+    (gm,md@MD{player0=pl0, player1=pl1}) <- liftIO (readMVar gmVar)
+    pln <- elemIndex plID [pl0,pl1] ? forbidden
+    returnPage$ debug "unimplemented"
+{-
+    let vs = views info
+    let view = fromMaybe (snd$ head vs) (v >>= lookIn vs)
+    let tpath = tag info </> C.unpack view
+    let values = [("path",Lst [Lst[Str "/", Str "Home"]]),
+         ("lastpath", Str"Wait"),
+         ("links",Lst[Lst[Str$ "?pageType={}&gameID={}&playerID={}"%C.unpack ptype%C.unpack gmNum%C.unpack plID,
+                          Str$ C.unpack ptype++" view"] | (ptype,file) <- vs,  ptype/=view])
+                            ]++
+           map (\(x,y)->(x,Str y))
+            [{-("player","You"),-} ("playerID", C.unpack plID), ("playern", show pln),
+            ("player"++show pln,"You"),("player"++show(1-pln),"Opponent"),
+            ("gameID", C.unpack gmNum),
+             ("data" , encode (getData gm))]
+    return$ tpath `loadWith` values-}
+
+
+--Status pages
+-----------------------------------
 
 pageNotFound :: Response --Note: warp overwrites status code (hence not using file)
 pageNotFound = responseLBS notFound404 [(hContentType,"text/html")]
@@ -270,8 +330,8 @@ serverError err = responseLBS (Status 500 (C.pack err)) [(hContentType,"text/htm
         " </body>",
         " </html>"])
 
-jsonResp :: A.Value -> Response
-jsonResp = responseLBS ok200 [(hContentType,"application/json")] . A.encode
+jsonResp :: JSObject JSValue -> Response
+jsonResp = responseLBS ok200 [(hContentType,"application/json")] . CL.pack . ($"") .showJSObject
 
 --encodeToTextBuilder :: A.Value -> Builder
 --encodeToTextBuilder = A.encodeToTextBuilder

@@ -7,7 +7,8 @@ import Data.Array
 import Data.Char(ord)
 import Data.Maybe(fromMaybe)
 
-import Data.Aeson(toJSON)
+--import Data.Aeson(toJSON)
+import Text.JSON
 
 type Pos = (Int,Int,Int)
 type Line = [Pos]
@@ -39,7 +40,7 @@ instance Game OX where
     newGame = OX $ array grid [(i,' ') | i<-range grid]
     makeMove pos g s =
         getPos pos >>= (\ p -> move p g s)
-    getData (OX arr) = toJSON $ elems arr
+    getData (OX arr) = showJSON $ elems arr
     ais = lookIn []
 
 getPos :: String -> Either String (Int,Int,Int)

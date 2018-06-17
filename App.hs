@@ -21,19 +21,19 @@ appmm :: Middleware
 appmm a1 req respond = do
     putStrLn $ unlines $ map ($req)  [const "",
         ("requestMethod:"++).show.requestMethod,
-        ("httpVersion:"++).show.httpVersion,
+        --("httpVersion:"++).show.httpVersion,
         ("rawPathInfo:"++).show.rawPathInfo,
         ("rawQueryString:"++).show.rawQueryString,
-        ("requestHeaders:"++).show.requestHeaders,
-        ("isSecure:"++).show.isSecure,
-        ("remoteHost:"++).show.remoteHost,
+        --("requestHeaders:"++).show.requestHeaders,
+        --("isSecure:"++).show.isSecure,
+        --("remoteHost:"++).show.remoteHost,
         ("pathInfo:"++).show.pathInfo,
         ("queryString:"++).show.queryString,
-        ("requestBodyLength:"++).show.requestBodyLength,
-        ("requestHeaderHost:"++).show.requestHeaderHost,
-        ("requestHeaderRange:"++).show.requestHeaderRange,
-        ("requestHeaderReferer:"++).show.requestHeaderReferer,
-        ("requestHeaderUserAgent:"++).show.requestHeaderUserAgent]
+        ("requestBodyLength:"++).show.requestBodyLength]
+        --("requestHeaderHost:"++).show.requestHeaderHost,
+        --("requestHeaderRange:"++).show.requestHeaderRange,
+        --("requestHeaderReferer:"++).show.requestHeaderReferer,
+        --("requestHeaderUserAgent:"++).show.requestHeaderUserAgent]
     a1 req (\resp -> putStrLn (show$ responseStatus resp) >> respond resp)
     {-respond $ responseLBS
         status200
