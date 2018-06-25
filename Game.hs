@@ -1,5 +1,5 @@
 module Game(Player(..),other,Game(..),MetaData(..),Status(..),newMD,
-    PlayerID,GameID,gameURL) where
+    PlayerID,GameID,gameURL,move, updateMsg) where
 
 --import Data.Aeson(ToJSON(..),Value,object)
 import Text.JSON
@@ -12,29 +12,36 @@ import Data.ByteString.Char8(ByteString,unpack)
 import Data.Int
 import System.Posix.Time
 import Utils
+import Control.Arrow
 
-class Game g where
+class Eq g => Game g where -- never forget that the implication is the wrong way round
     --makeMove assumes the move is made by the player whose turn it is
     makeMove :: String -> g -> Status -> Either String (g,Status)
     getData :: g -> JSValue
     newGame :: g
     ais :: String -> Maybe (g -> Either String g)
 
---in progress
---move :: Game g => String -> (g,MetaData) -> (g,MetaData)
---move pos (game,dat) = (\(g,s) -> OXG g (md{status=s}) ) <$> makeMove pos game (status md)
+move :: Game g => Player -> String -> (g,MetaData) -> Either String (g,MetaData)
+move pl pos (gm,md) =
+    second (\s ->(md{status=s}) ) <$> case status md of
+        s@(IsTurn p) -> if p==pl then makeMove pos gm s
+            else Left "It is not your turn"
+        s -> if gameover s then Left "The game has finished"
+            else Left "You are trying to make a move for a game that has not started"
+     --(\(g,s) -> OXG g (md{status=s}) ) <$> makeMove pos game (status md)
 
 type PlayerID = ByteString
 type GameID = ByteString
 
+type GameData g = (g,MetaData)
 
 data MetaData = MD { --data common to all game types
     player0 :: PlayerID,
     player1 :: PlayerID,
-    listeners :: [Connection],
+    --listeners :: [Connection],
     gid :: GameID,
     lastMove :: Int,--time of last move played
-    status :: Status}--OK, turn isn't really metadata
+    status :: Status} deriving (Eq) --OK, turn isn't really metadata
 
 newMD :: PlayerID -> PlayerID -> Player -> GameID -> IO MetaData
 newMD pl0 pl1 p gid = do
@@ -42,7 +49,7 @@ newMD pl0 pl1 p gid = do
     return MD{
         player0   = pl0,
         player1   = pl1,
-        listeners = [],
+        --listeners = [],
         gid       = gid,
         lastMove  = t,
         status    = Unstarted p}
@@ -57,13 +64,14 @@ newMD pl0 pl1 p gid = do
 --(.::) :: ToJSON b => String->b->Pair
 --a .:: b = (pack a,toJSON $ unpack b)
 
-updateMsg :: Game g => g -> MetaData -> JSObject JSValue
-updateMsg gg dat  = toJSObject
+updateMsg :: Game g => g -> MetaData -> [(String,JSValue)]
+updateMsg gg dat  = --toJSObject
     ["request" .: "update",
      "data" .: (getData  gg),
      "gameID" .: gid dat,
      "state" .: fromEnum (status dat)]
 
+-- player Zero always starts
 data Player = Zero | One deriving (Eq,Show,Enum)
 
 other :: Player -> Player

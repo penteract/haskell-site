@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module PageApp where
 
-import Data(GameStoreList(..),GameStore,Game,ox)
+import Data(GameStoreList,GameStore,Game,GameInfo(..), Retriveable(..),games)
 import Template
 import Utils
 import Pages
@@ -18,9 +18,10 @@ import qualified Data.Map as Map
 import qualified Control.Concurrent.Map as CMap
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
-import Control.Monad.Reader(runReaderT,join,lift)
-import Control.Monad.State(evalStateT)
+--import Control.Monad.Reader(runReaderT,join,lift)
+--import Control.Monad.State(evalStateT)
 import Control.Monad.Except(runExceptT)
+import Control.Monad.RWS(evalRWST,join,lift)
 import System.FilePath((</>))
 import System.Random
 
@@ -33,7 +34,7 @@ cannonise = C.map toLower
 
 pageList :: [(C.ByteString, [(Method,Handler)])]
 pageList =  ([("/",[(methodGet,homePage)])] ++
-    concat [procPages getOXStore "ox3" ])
+    concat [procPages info getStore | (Retrive getStore, info)<-games ])
 
 
 
@@ -41,10 +42,10 @@ globalPages :: [(C.ByteString, [(Method,Handler)])]
 globalPages = [
     ("/",[(methodGet,homePage)])]
 
-procPages :: Game g => (GameStoreList -> GameStore g) -> C.ByteString ->
+procPages :: Game g => GameInfo -> (GameStoreList -> GameStore g) ->
     [(C.ByteString, [(Method, Handler)])]
-procPages getS tag = [(C.concat["/",tag,"/",path],
-    [(meth,(getS<$> gameStore) >>= h ox)
+procPages info getS = [(C.concat["/",C.pack$ tag info,"/",path],
+    [(meth,(getS<$> gameStore) >>= h info)
         | (meth,h)<-hs])
     | (path,hs) <- perGamePages]
 
@@ -66,15 +67,14 @@ perGamePages = [
 --function for rearranging arguments while presenting a wai-style interface
 pageApp :: Templates -> GameStoreList -> Application
 pageApp ts gs req resp =
-    evalStateT (runReaderT (runExceptT (pageApp' (lookIn pageList))) (req,gs)) Nothing >>= ret
+    evalRWST (runExceptT (pageApp' (lookIn pageList))) (req,gs) Nothing >>= ret
     where
-        ret (Left p)  = resp p
-        ret (Right h) = resp (h ts)
+        ret (Left p, w)  = w >> resp p
+        ret (Right h, w) = resp (h ts)
 
---Consider reordering arguments
+
 pageApp' :: (C.ByteString -> Maybe Page) -> Handler
 pageApp' getPage = do --HandlerM
-    --lift$lift$lift (putStrLn$unlines (map (C.unpack.fst) pageList))
     req <- request
     let path = rawPathInfo req
         cannonicalPath = cannonise path

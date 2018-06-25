@@ -24,4 +24,4 @@ main :: IO ()
 main = do
    [inDir,outDir] <- getArgs
    procDir [("four",Lst $ map (Str .show) [0..3]),
-       ("gameList", Lst [Lst [Str tag, Str name, Lst []] | GameInfo{tag=tag,name=name} <- games])] inDir outDir
+       ("gameList", Lst [Lst [Str tag, Str name, Lst []] | (_,GameInfo{tag=tag,name=name}) <- games])] inDir outDir

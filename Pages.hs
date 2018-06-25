@@ -1,17 +1,17 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE OverloadedStrings, RankNTypes #-}
 module Pages(Handler,GameHandler,
     request,gameStore,
     homePage,newGameh,
     waitPage,checkRequest,
     startGamePage, startGameh,
-    playPage,
+    playPage,makeMoveh,
     pageNotFound) where
 
 import Network.Wai
 import Template
 import Utils
 import Data
-import Game(gameURL)--should this be in Data?
+import Game(gameURL, move, updateMsg, other)--should this be in Data?
 
 import Network.HTTP.Types
 import System.Random
@@ -20,6 +20,7 @@ import qualified Control.Concurrent.Map as CMap
 import Control.Monad.Reader hiding (unless)
 import Control.Monad.State hiding (unless)
 import Control.Monad.Except hiding (unless)
+import Control.Monad.RWS hiding (unless)
 import qualified Data.ByteString.Char8 as C
 import qualified Data.ByteString.Lazy.Char8 as CL
 import qualified Data.Map as Map
@@ -37,11 +38,18 @@ import Text.JSON
 
 --type ($) a b = a b
 
-type HandlerM = ExceptT Response (ReaderT (Request,GameStoreList)
-    (StateT (Maybe StdGen)  IO))
+--type HandlerM = ExceptT Response (ReaderT (Request,GameStoreList) (StateT (Maybe StdGen)  IO))
 
+
+-- Writing IO () to cover cleanup actions is not ideal - I don't know how bad (>> return ()) is
+-- The state is used for RNG;  the request and list of gamestores are
+type HandlerM = ExceptT Response (RWST (Request,GameStoreList) (IO ()) (Maybe StdGen)  IO)
+
+-- Using this type means that we are not free to perform any IO action based on the contents of the templates
+-- It could instead return the arguments to loadWith (but we'd have to change the usage fo the writer monad)
 type Handler = HandlerM (Templates -> Response)
 
+--the gamestore is technically passed twice, but I don't think that matters
 type GameHandler g = GameInfo -> GameStore g -> HandlerM (Templates -> Response)
 
 returnPage :: Response -> HandlerM a
@@ -63,9 +71,9 @@ getBodyParam p = (join . lookup p . parseQuery) <$> (request >>= liftIO.requestB
 gameStore :: HandlerM GameStoreList
 gameStore = snd<$>ask
 
-getGame :: Game g => GameID -> GameStore g -> HandlerM (Maybe (MVar (g,MetaData)))
+getGame :: Game g => GameID -> GameStore g -> HandlerM (Maybe (X (g,MetaData)))
 getGame gmNum store = (liftIO$ CMap.lookup gmNum store)
-getGame' :: Game g => GameID -> GameStore g -> Response -> HandlerM (MVar (g,MetaData))
+getGame' :: Game g => GameID -> GameStore g -> Response -> HandlerM (X (g,MetaData))
 getGame' gmNum store resp = (liftIO$ CMap.lookup gmNum store) >>= (? resp)
 
 --getCurrentPlayer :: HM (Maybe C.ByteString)
@@ -119,20 +127,20 @@ getThings = mapM (\s -> do
 
 homePage :: Handler
 homePage = return $ "games.html" `loadWith` [
-    ("gameList", Lst [Lst [Str tag, Str name, Lst []] | GameInfo{tag=tag,name=name} <- games]),
+    ("gameList", Lst [Lst [Str tag, Str name, Lst []] | (_,GameInfo{tag=tag,name=name}) <- games]),
     ("path",Lst []),
     ("lastpath",Str "home")]
 
 newGameh :: Game g => GameHandler g
 newGameh info store = do
     playerID <- randomString --getParam "playerID" >>= maybe randomString return
-    opp <- getParam "opp" >>= (? badRequest)
+    opp <- getParam' "opp" -- >>= (? badRequest)
     gid <- randomString
-    turn <- getParam "turn"
+    turn <- getParam "turn" -- "false" means that the requesting player does not start
     let p = toEnum$fromEnum$ turn == Just "false"
     let (pl0, pl1) = (if p == Zero then id else swap) (playerID,opp)
-    md <- liftIO $ newMD pl0 pl1 p gid
-
+    md <- liftIO $ newMD pl0 pl1 (other p) gid
+    --liftIO$ putStrLn "got here3"
     (gameState,rdUrl) <- case C.unpack opp of
         "y" -> do
             return ((newGame,md),
@@ -152,7 +160,7 @@ newGameh info store = do
         _ -> throwError badRequest
 
     --sg <- (lift $ lift $ (newMVar $ (newGame,newMD "pl0" "pl1" gid)) :: HM (MVar (g, MetaData)))
-    sg <- liftIO $ newMVar gameState
+    sg <- liftIO $ newXVar gameState
     liftIO $ CMap.insert gid sg store
     return $ const $ responseLBS ok200 [] (CL.concat
         [CL.pack (tag info), "/", rdUrl])
@@ -170,14 +178,14 @@ waitPage :: Game g => GameHandler g
 waitPage info store = do
     gmNum <- getParam' "gameID"
     gm <- (liftIO$ CMap.lookup gmNum store) >>= (? pageNotFound)
-    (game, md@MD{status=s,player0=pl0,player1=pl1}) <- liftIO$ readMVar gm
+    (game, md@MD{status=s,player0=pl0,player1=pl1}) <- liftIO$ readX gm
     plID <- getParam' "playerID" -- >>= return. (maybe)
     pl <- if pl0==plID then return Zero else ((pl1==plID??badRequest)>> return One)
     things <- getThings ["playerID", "gameID"]
     case s of
         Unstarted p  -> do
-            p == pl??badRequest
-            --check time
+            p /= pl ??badRequest -- the waiting player should be different to the player being waited for
+            --TODO: check time
             host <- reader (requestHeaderHost.fst) >>= (? badRequest)
             return$ loadWith "wait.html" (things ++ [("game",Str$ name info),("url",Str$ C.unpack host++"/"++tag info++"/join?gameID="++ C.unpack gmNum), ("path",Lst [Lst[Str "/", Str "Home"]]), ("lastpath", Str"Wait")])
             --return$ loadWith "wait.html" (things ++ [("game",Str$ name info),("url",Str$ C.unpack host++"/join?gameID="++ C.unpack gmNum)])
@@ -190,12 +198,12 @@ checkRequest :: Game g => GameHandler g
 checkRequest info store = do
     gmNum <- getParam' "gameID"
     gm <- (liftIO$ CMap.lookup gmNum store) >>= (? responseLBS ok200 [] "no") --no game found? --could be 404, 422
-    (game, md@MD{status=s,player0=pl0,player1=pl1}) <- liftIO$ readMVar gm
+    (game, md@MD{status=s,player0=pl0,player1=pl1}) <- liftIO$ readX gm
     plID <- getParam' "playerID" -- >>= return. (maybe)
     pl <- if pl0==plID then return Zero else ((pl1==plID??badRequest)>> return One)
 
     let msg = [("gameID".: C.unpack gmNum)]
-    let returnJSON dat = returnPage (jsonResp$toJSObject$ (msg++dat))
+    let returnJSON dat = returnPage (jsonResp$ (msg++dat))
     let reply answer = returnJSON [("request".:."reply"), ("answer".:.answer)]
     case s of
         Unstarted p  -> do
@@ -224,13 +232,19 @@ startGameh info store = do
     --parseQuery
     gmNum <- getBodyParam "gameID"
     gmVar <- getGame' gmNum store pageNotFound --perhaps this should be a different error
-    (gm,md@MD{player0=pl0,player1=pl1}) <- liftIO (takeMVar gmVar)
-    case status md of
-        Unstarted p -> do
-            liftIO (putMVar gmVar (gm,md{status=IsTurn Zero}))
-            --let pl = if p==Zero then pl0 else pl1
-            returnPage (responseLBS ok200  [("Content-Type","text/plain")] (CL.pack (gameURL md (tag info) (Just p))))
-        _ -> liftIO (putMVar gmVar (gm,md)) >> returnPage (responseLBS ok200 [("Content-Type","text/plain")] "/")
+    v <- liftIO (maybeModify gmVar
+        (\ (gm,md@MD{player0=pl0,player1=pl1}) ->
+            case status md of
+                Unstarted p -> ((CL.pack (gameURL md (tag info) (Just p))), Just (gm,md{status=IsTurn Zero}))
+                _ -> ("/", Nothing)))
+    returnPage$ responseLBS ok200 [("Content-Type","text/plain")]  v
+    -- (gm,md@MD{player0=pl0,player1=pl1}) <- liftIO (takeMVar gmVar)
+    -- case status md of
+    --     Unstarted p -> do
+    --         liftIO (putMVar gmVar (gm,md{status=IsTurn Zero}))
+    --         --let pl = if p==Zero then pl0 else pl1
+    --         returnPage (responseLBS ok200  [("Content-Type","text/plain")] (CL.pack (gameURL md (tag info) (Just p))))
+    --     _ -> liftIO (putMVar gmVar (gm,md)) >> returnPage (responseLBS ok200 [("Content-Type","text/plain")] "/")
     --return undefined
 
 playPage :: Game g => GameHandler g
@@ -239,7 +253,7 @@ playPage info store = do
     plID <- getParam' "playerID" --could change later to allow observers
     --liftIO (putStrLn "hi")
     gmVar <- getGame' gmNum store pageNotFound
-    (gm,md@MD{player0=pl0, player1=pl1}) <- liftIO (readMVar gmVar)
+    (gm,md@MD{player0=pl0, player1=pl1}) <- liftIO (readX gmVar)
     pln <- elemIndex plID [pl0,pl1] ? forbidden
     v <- getParam "view"
     let vs = views info
@@ -254,7 +268,8 @@ playPage info store = do
             [{-("player","You"),-} ("playerID", C.unpack plID), ("playern", show pln),
             ("player"++show pln,"You"),("player"++show(1-pln),"Opponent"),
             ("gameID", C.unpack gmNum),
-             ("data" , encode (getData gm))]
+            ("data" , encode (getData gm)),
+            ("gametag",tag info)]
     return$ tpath `loadWith` values
 
 
@@ -262,26 +277,26 @@ makeMoveh :: Game g => GameHandler g
 makeMoveh info store = do
     gmNum <- getParam' "gameID"
     plID <- getParam' "playerID"
-    pos <- getParam "pos"
+    pos <- getParam' "pos"
     gmVar <- getGame' gmNum store pageNotFound
-    (gm,md@MD{player0=pl0, player1=pl1}) <- liftIO (readMVar gmVar)
-    pln <- elemIndex plID [pl0,pl1] ? forbidden
-    returnPage$ debug "unimplemented"
-{-
-    let vs = views info
-    let view = fromMaybe (snd$ head vs) (v >>= lookIn vs)
-    let tpath = tag info </> C.unpack view
-    let values = [("path",Lst [Lst[Str "/", Str "Home"]]),
-         ("lastpath", Str"Wait"),
-         ("links",Lst[Lst[Str$ "?pageType={}&gameID={}&playerID={}"%C.unpack ptype%C.unpack gmNum%C.unpack plID,
-                          Str$ C.unpack ptype++" view"] | (ptype,file) <- vs,  ptype/=view])
-                            ]++
-           map (\(x,y)->(x,Str y))
-            [{-("player","You"),-} ("playerID", C.unpack plID), ("playern", show pln),
-            ("player"++show pln,"You"),("player"++show(1-pln),"Opponent"),
-            ("gameID", C.unpack gmNum),
-             ("data" , encode (getData gm))]
-    return$ tpath `loadWith` values-}
+    --(gm,md@MD{player0=pl0, player1=pl1}) <- liftIO (takeMVar gmVar)
+
+    v <- liftIO$ maybeModify gmVar (\ (gm,md@MD{player0=pl0, player1=pl1}) ->
+        case elemIndex plID [pl0,pl1] of
+            Nothing -> (forbidden,Nothing)
+            (Just pln) -> case move (toEnum pln) (C.unpack pos) (gm,md) of
+                Left err -> (jsonResp  ["request" .:. "message", "content" .:. err, "gameID" .: gmNum],Nothing)
+                Right (gm',md') -> (jsonResp (updateMsg gm' md'), Just (gm',md')))
+    returnPage v
+    --tell (putMVar gmVar (gm,md))
+
+    --returnPage$ debug "unimplemented"
+    -- let returnJSON dat = returnPage$ jsonResp$ dat++["gameID" .: gmNum]
+    -- case move (toEnum pln) (C.unpack pos) (gm,md) of
+    --     Left err -> returnJSON ["request" .:. "message", "content" .:. err ]
+    --     Right (gm',md') -> liftIO ( putMVar gmVar (gm',md') >> (return.const.jsonResp) (updateMsg gm' md'))
+
+
 
 
 --Status pages
@@ -330,8 +345,8 @@ serverError err = responseLBS (Status 500 (C.pack err)) [(hContentType,"text/htm
         " </body>",
         " </html>"])
 
-jsonResp :: JSObject JSValue -> Response
-jsonResp = responseLBS ok200 [(hContentType,"application/json")] . CL.pack . ($"") .showJSObject
+jsonResp :: [(String, JSValue)] -> Response
+jsonResp = responseLBS ok200 [(hContentType,"application/json")] . CL.pack . ($"") .showJSObject . toJSObject
 
 --encodeToTextBuilder :: A.Value -> Builder
 --encodeToTextBuilder = A.encodeToTextBuilder

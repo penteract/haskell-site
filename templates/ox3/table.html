@@ -56,7 +56,7 @@ function show(data){
   for(z=0;z<4;z++){
     for(y=0;y<4;y++){
       for(x=0;x<4;x++){
-        $("#p"+x+y+z).text(data.board[z*16+y*4+x]);
+        $("#p"+x+y+z).text(data.board[z+y*4+x*16]);
         $("#t"+x+y+z).removeClass("won");
         }
       }
@@ -83,7 +83,7 @@ $(function(){$(".sub td").click(function(){
   <<FOR y IN four:
     <tr>
     <<FOR x IN four:
-      <td id=t<<x>><<y>><<z>>><p id=p<<x>><<y>><<z>> class=in-cell> </p></td>
+      <td id="t<<x>><<y>><<z>>"><p id="p<<x>><<y>><<z>>" class=in-cell> </p></td>
     >>
     </tr>
   >>

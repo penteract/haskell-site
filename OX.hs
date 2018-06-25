@@ -1,6 +1,6 @@
 module OX where
 
-import Game
+import Game hiding (move)
 import Utils
 
 import Data.Array
@@ -13,7 +13,10 @@ import Text.JSON
 type Pos = (Int,Int,Int)
 type Line = [Pos]
 
-newtype OX = OX (Array Pos Char)
+data OX = OX (Array Pos Char) [[Pos]] deriving (Eq)
+
+instance Show OX where
+    show (OX arr wl) = unlines [unlines [[arr!(x,y,z) | x<- [0..3]] | y<- [0..3]] | z<-[0..3]] ++ show wl
 
 
 toSym One = 'X'
@@ -21,26 +24,28 @@ toSym Zero = 'O'
 
 --Status is guarenteed to be of the form (IsTurn p)
 move :: Pos -> OX -> Status -> Either String (OX,Status)
-move pos (OX board) (IsTurn pl) = do
+move pos (OX board wl) (IsTurn pl) = do
     "Position not inside grid" `unless` inRange grid pos
     "Cell is not Empty" `unless` (board!pos==' ')
 
     let tok = toSym pl
     let newBoard = board//[(pos,tok)]
-    return (OX newBoard,
-        if any (all (\x -> newBoard!x == tok)) (linesThrough pos)
+    let wl' =  [ line | line <- (linesThrough pos) , all (\x -> newBoard!x == tok) line]
+    return (OX newBoard wl',
+        if not$ null wl'
             then Won pl
-            else if any (\x -> newBoard!x==' ') grid
+            else if any (\x -> newBoard!x == ' ') (range grid)
                 then IsTurn $ other pl
                 else Draw)
 
 
 
 instance Game OX where
-    newGame = OX $ array grid [(i,' ') | i<-range grid]
+    newGame = OX (array grid [(i,' ') | i<-range grid]) []
     makeMove pos g s =
         getPos pos >>= (\ p -> move p g s)
-    getData (OX arr) = showJSON $ elems arr
+    getData (OX arr wl) = JSObject $ toJSObject ["board" .: showJSON (elems arr),
+              "wonlines" .: showJSON wl]
     ais = lookIn []
 
 getPos :: String -> Either String (Int,Int,Int)
@@ -52,7 +57,7 @@ getPos pos = fromMaybe (Left "Bad position format") (do
 
 getCor :: Char -> Maybe Int
 getCor c = if n>=0 && n<4 then return n else Nothing
-    where n = ord c - 32
+    where n = ord c - 48
 
 
 grid :: ((Int,Int,Int),(Int,Int,Int))
@@ -84,3 +89,7 @@ linesThrough (0,0,1) = [(0,0,step) | step<-[0..3]]:
 
 linesThrough p = map (map t) $ linesThrough (t p)
     where t = trans p
+
+
+--testSeq [Pos] -> (Int, Either )
+--testSeq =

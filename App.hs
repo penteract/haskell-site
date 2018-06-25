@@ -24,7 +24,7 @@ appmm a1 req respond = do
         --("httpVersion:"++).show.httpVersion,
         ("rawPathInfo:"++).show.rawPathInfo,
         ("rawQueryString:"++).show.rawQueryString,
-        --("requestHeaders:"++).show.requestHeaders,
+        ("requestHeaders:"++).show.requestHeaders,
         --("isSecure:"++).show.isSecure,
         --("remoteHost:"++).show.remoteHost,
         ("pathInfo:"++).show.pathInfo,
@@ -35,6 +35,7 @@ appmm a1 req respond = do
         --("requestHeaderReferer:"++).show.requestHeaderReferer,
         --("requestHeaderUserAgent:"++).show.requestHeaderUserAgent]
     a1 req (\resp -> putStrLn (show$ responseStatus resp) >> respond resp)
+    --a1 req respond
     {-respond $ responseLBS
         status200
         [("Content-Type", "text/plain")]
